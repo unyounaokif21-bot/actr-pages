@@ -102,6 +102,10 @@
   $('#start').onclick = async function(){
     if (tel) {                                   // 発信（MacではFaceTime → iPhone経由）
       var a = document.createElement('a'); a.href = 'tel:' + tel; document.body.appendChild(a); a.click(); a.remove();
+      // 右上に出る「通話」の確認を、Macのショートカット「ACTR_CALL」で自動で押す（入っていなければ何も起きない）
+      if (!/iPhone|Android/.test(navigator.userAgent)) setTimeout(function(){
+        var b = document.createElement('a'); b.href = 'shortcuts://run-shortcut?name=ACTR_CALL'; document.body.appendChild(b); b.click(); b.remove();
+      }, 400);
     }
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true, channelCount: 1 } });
