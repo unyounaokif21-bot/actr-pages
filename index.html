@@ -70,7 +70,7 @@
   var name = q.get('name') || '';
   var origin = q.get('origin') || '';
   // 送り先は業務ツール（Google Apps Script の画面）だけに限る
-  var okOrigin = /^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(origin) ? origin : '';
+  var okOrigin = (/^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(origin) || origin === "https://unyounaokif21-bot.github.io") ? origin : "";
   $('#who').textContent = (name || '（氏名なし）') + '　' + (tel || '（電話番号なし）');
 
   function send(msg){

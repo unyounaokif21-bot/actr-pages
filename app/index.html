@@ -7,22 +7,44 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="業務ツール">
 <title>業務ツール</title>
-<style>
-  html,body{margin:0;height:100%;background:#E9EEF1;font:15px -apple-system,"Hiragino Sans",sans-serif}
-  iframe{position:fixed;inset:0;width:100%;height:100%;border:0}
-  #need{display:none;padding:24px;line-height:1.7}
-</style>
+<style>html,body{margin:0;background:#E9EEF1;font:15px -apple-system,"Hiragino Sans",sans-serif}#msg{padding:24px;line-height:1.7}</style>
 </head>
 <body>
-<!-- 業務ツール（Google Apps Script）を全画面で表示する入れ物（Googleの帯を出さないため）。
-     ツールのURLはこのファイルに書かず、最初に開くリンクの「#u=…」から受け取ってこの端末に保存する -->
-<iframe id="app" allow="microphone; clipboard-read; clipboard-write; autoplay"></iframe>
-<div id="need">このページは、業務ツールの案内リンク（LINEなど）から開いてください。</div>
+<div id="msg">業務ツールを読み込んでいます…</div>
+<!-- 業務ツール（Google Apps Script）の画面を、Googleの帯を出さずにこのページで表示する。
+     画面のHTMLはツールから毎回取ってくる（このファイルには中身を書かない）。ツールのURLは「#u=…」で受け取ってこの端末に保存する。
+     画面からの google.script.run は、ツールへの POST（doPost の rpc）に置き換える -->
 <script>
+(function(){
   var h = new URLSearchParams(location.hash.slice(1)), u = h.get('u') || '';
   try { if (u) localStorage.setItem('toolUrl', u); else u = localStorage.getItem('toolUrl') || ''; } catch (e) {}
-  if (/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(u)) document.getElementById('app').src = u + location.search;
-  else { document.getElementById('app').style.display = 'none'; document.getElementById('need').style.display = 'block'; }
+  var msg = document.getElementById('msg');
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(u)) { msg.textContent = 'このページは、業務ツールの案内リンク（LINEなど）から開いてください。'; return; }
+  var qs = new URLSearchParams(location.search); qs.set('raw', '1');
+  function shim(EXEC){
+    function run(ok, ng){
+      return new Proxy({}, { get: function(_, name){
+        if (name === 'withSuccessHandler') return function(f){ return run(f, ng); };
+        if (name === 'withFailureHandler') return function(f){ return run(ok, f); };
+        if (name === 'withUserObject') return function(){ return run(ok, ng); };
+        return function(){
+          var args = Array.prototype.slice.call(arguments);
+          fetch(EXEC, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ rpc: name, args: args }) })
+            .then(function(r){ return r.json(); })
+            .then(function(j){ if (j && j.ok) { if (ok) ok(j.v); } else if (ng) ng(new Error(j && j.e || 'エラー')); })
+            .catch(function(e){ if (ng) ng(e); });
+        };
+      } });
+    }
+    window.google = { script: { run: run(null, null), host: { close: function(){}, setHeight: function(){} } } };
+  }
+  fetch(u + '?' + qs.toString()).then(function(r){ return r.text(); }).then(function(html){
+    if (!/<html/i.test(html)) throw new Error('画面を取得できませんでした');
+    var head = '<title>業務ツール</title><script>(' + shim.toString() + ')(' + JSON.stringify(u) + ');<\/script>';
+    html = html.replace(/<head>/i, '<head>' + head);
+    document.open(); document.write(html); document.close();
+  }).catch(function(e){ msg.innerHTML = '読み込めませんでした（' + String(e && e.message || e) + '）。<br><a href="' + u + '">こちらから開く</a>'; });
+})();
 </script>
 </body>
 </html>
