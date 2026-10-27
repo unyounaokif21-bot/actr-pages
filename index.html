@@ -279,13 +279,17 @@
     cd.st('📵 不在として記録しています…');
     var show = function(r, err){
       r = r || {};
-      cd.st(err ? '⚠ 記録できませんでした：' + err + '（SMSは送れます）' : '📵 ' + (r.n || 1) + '回目の不在を記録しました');
-      cd.bd.innerHTML = '<textarea></textarea><button style="background:var(--teal);color:#fff">✉ このSMSを送る</button><div class="note"></div>';
+      cd.st(err ? '⚠ 記録できませんでした：' + err + '（SMSは送れます）' : r.dup ? '📵 ' + (r.msg || 'この人の不在は記録済みです') : '📵 ' + (r.n || 1) + '回目の不在を記録しました');
+      cd.bd.innerHTML = '<textarea></textarea><button style="background:var(--teal);color:#fff">' + (r.dup ? '✉ さっき送っていなければ送る' : '✉ このSMSを送る') + '</button><div class="note"></div>';
+      if (r.dup) { cd.bd.querySelector('textarea').style.display = 'none'; cd.bd.querySelector('button').style.background = 'var(--muted)'; }
       var ta = cd.bd.querySelector('textarea');
       ta.value = r.sms || '求人ボックスからご応募いただきありがとうございます。株式会社ACT-Rの香川です。先ほどお電話いたしました。ご都合のよい時間をお知らせください。';
       cd.bd.querySelector('button').onclick = function(){
         var to = String(who.tel || '').replace(/[^0-9]/g, '');
         if (!to) { alert('電話番号がありません'); return; }
+        var sent = {}; try { sent = JSON.parse(localStorage.getItem('smsSent') || '{}'); } catch(x) {}
+        if (sent[to] && Date.now() - sent[to] < 30 * 60000 && !confirm(Math.round((Date.now() - sent[to]) / 60000) + '分前にこの人へSMSを送っています。もう一度送りますか？')) return;
+        sent[to] = Date.now(); try { localStorage.setItem('smsSent', JSON.stringify(sent)); } catch(x) {}
         location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent('ACTR_SMS') + '&input=text&text=' + encodeURIComponent(JSON.stringify({ to: to, body: ta.value }));
         this.disabled = true; this.textContent = '✅ 送りました';
         cd.bd.querySelector('.note').innerHTML = '送れていなければ → <a href="sms:' + to + '&body=' + encodeURIComponent(ta.value) + '">メッセージで開いて手で送る</a>';
