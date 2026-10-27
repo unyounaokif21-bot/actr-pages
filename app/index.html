@@ -6,6 +6,7 @@
 <meta name="robots" content="noindex, nofollow">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="業務ツール">
+<link rel="icon" type="image/png" sizes="32x32" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-32.png"><link rel="icon" type="image/png" sizes="512x512" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-512.png"><link rel="apple-touch-icon" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-180.png">
 <title>業務ツール</title>
 <style>html,body{margin:0;background:#E9EEF1;font:15px -apple-system,"Hiragino Sans",sans-serif}#msg{padding:24px;line-height:1.7}</style>
 </head>
@@ -40,7 +41,7 @@
   }
   fetch(u + '?' + qs.toString()).then(function(r){ return r.text(); }).then(function(html){
     if (!/<html/i.test(html)) throw new Error('画面を取得できませんでした');
-    var head = '<title>業務ツール</title><script>(' + shim.toString() + ')(' + JSON.stringify(u) + ');<\/script>';
+    var head = '<link rel="icon" type="image/png" sizes="32x32" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-32.png"><link rel="icon" type="image/png" sizes="512x512" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-512.png"><link rel="apple-touch-icon" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-180.png"><title>業務ツール</title><script>(' + shim.toString() + ')(' + JSON.stringify(u) + ');<\/script>';
     html = html.replace(/<head>/i, '<head>' + head);
     document.open(); document.write(html); document.close();
   }).catch(function(e){ msg.innerHTML = '読み込めませんでした（' + String(e && e.message || e) + '）。<br><a href="' + u + '">こちらから開く</a>'; });
