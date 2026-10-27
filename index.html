@@ -130,9 +130,10 @@
 
   $('#start').onclick = async function(){
     EAR = $('#earMode').checked;
-    if (EAR) {
+    var sysLive = sysStream && sysStream.getAudioTracks().some(function(t){ return t.readyState === 'live'; });
+    if (EAR && !sysLive) {
       try {
-        sysStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: { echoCancellation: false, noiseSuppression: false }, systemAudio: 'include', selfBrowserSurface: 'exclude' });
+        sysStream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'monitor' }, audio: { echoCancellation: false, noiseSuppression: false }, systemAudio: 'include', selfBrowserSurface: 'exclude', monitorTypeSurfaces: 'include', surfaceSwitching: 'exclude' });
       } catch (e) { $('#state').textContent = '画面の共有がキャンセルされました。もう一度押すか、「イヤホンのまま録る」を外してください。'; return; }
       if (!sysStream.getAudioTracks().length) $('#state').textContent = '⚠「システムの音声も共有」にチェックがありませんでした。相手の声は入りません（自分の声だけ録ります）。';
       loadAsr().catch(function(){});                 // 文字起こしの準備を先に始めておく
@@ -201,7 +202,7 @@
     clearInterval(iv);
     $('#stop').disabled = true; $('#stop').textContent = '保存しています…';
     media.onstop = async function(){
-      [stream, micStream, sysStream].forEach(function(s){ try { s && s.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {} });
+      [stream, micStream].forEach(function(s){ try { s && s.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {} });   // 画面共有（相手の声）は止めずに次の電話でも使う
       try { mixCtx && mixCtx.close(); } catch(x) {}
       var blob = new Blob(chunks, { type: media.mimeType || 'audio/webm' });
       var secs = Math.round((Date.now() - t0) / 1000);
@@ -226,7 +227,9 @@
           : '<p><b>業務ツールの画面が見つかりませんでした。</b>下のボタンで録音と文字起こしを保存してください。</p>')
           + '<p><a download="' + stamp + '_' + tel + '.webm" href="' + url + '">録音を保存する</a>　<a download="' + stamp + '_' + tel + '.txt" href="' + txt + '">文字起こしを保存する</a></p>';
         $('#state').textContent = '終了しました（' + Math.floor(secs / 60) + '分' + (secs % 60) + '秒）。';
-        if (ok) {
+        if (ok && EAR && sysStream) {
+          $('#after').innerHTML = '<div style="text-align:center;padding:14px 8px"><div style="font-size:36px">✅</div><div style="font-size:17px;font-weight:900">保存しました</div><div style="font-size:13px;color:var(--muted);margin-top:4px">🎧 このウィンドウは開いたままにしてください。<br>次の人に「架電する」を押すと、画面共有を聞き直さずにそのまま録音を始めます。</div></div>';
+        } else if (ok) {
           var cb = document.getElementById('closeWin'); if (cb) cb.onclick = function(){ window.close(); };
           var left = 5, ci = setInterval(function(){ left--; var e = document.getElementById('closeIn'); if (e) e.textContent = left + '秒後に自動で閉じます'; if (left <= 0) { clearInterval(ci); window.close(); } }, 1000);
         }
@@ -268,6 +271,16 @@
     };
   }
 
+  window.addEventListener('hashchange', function(){
+    if (listening) return;
+    var q2 = new URLSearchParams(location.hash.slice(1));
+    tel = (q2.get('tel') || '').replace(/[^0-9]/g, ''); name = q2.get('name') || '';
+    $('#who').textContent = (name || '（氏名なし）') + '　' + (tel || '（電話番号なし）');
+    full = ''; chunks = []; $('#live').textContent = ''; $('#after').innerHTML = ''; $('#smsBox').style.display = 'none'; $('#smsText').value = '';
+    $('#stop').disabled = false; $('#stop').textContent = '■ 通話終了 → 保存して閉じる';
+    $('#start').style.display = 'block';
+    if (q2.get('auto') === '1') setTimeout(function(){ $('#start').click(); }, 300);
+  });
   window.addEventListener('beforeunload', function(e){ if (listening) { e.preventDefault(); e.returnValue = ''; } });
   // 業務ツールの「優先順に電話」から開いたときは、そのまま発信・録音を始める（ブラウザに止められたらボタンを押す）
   if (q.get('auto') === '1') {
