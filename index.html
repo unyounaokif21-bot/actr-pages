@@ -38,6 +38,8 @@
   <h1>通話の録音・聞き取り</h1>
   <div class="who" id="who"></div>
   <button id="start">📞 発信して記録開始</button>
+  <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:8px"><input type="checkbox" id="earMode" style="width:auto"> 🎧 イヤホンのまま録る（Macから出る音＝相手の声も取り込む）</label>
+  <div id="earNote" class="note" style="display:none;margin-top:4px">押すと「画面を共有」が出ます →「画面全体」を選び、<b>「システムの音声も共有」にチェック</b>して「共有」。画面の映像は使わず、音だけ録ります。通話のあと、このMacの中で文字起こしします（無料・外に送りません）。</div>
   <button id="stop">■ 通話終了 → 保存して閉じる</button>
   <button id="noans">📵 出なかった（SMSを送る）</button>
   <div id="smsBox">
@@ -100,7 +102,41 @@
     try { rec.start(); } catch(x) {}
   }
 
+  /* 🎧 イヤホンのまま録る：画面共有の「システムの音声」で相手の声を取り込み、マイクと混ぜて録音。文字起こしは通話後にこのMacの中のWhisperで */
+  var EAR = false, sysStream = null, micStream = null, mixCtx = null, asrP = null;
+  try { $('#earMode').checked = localStorage.getItem('earMode') === '1'; } catch(x) {}
+  var earShow = function(){ $('#earNote').style.display = $('#earMode').checked ? 'block' : 'none'; };
+  $('#earMode').onchange = function(){ try { localStorage.setItem('earMode', this.checked ? '1' : ''); } catch(x) {} earShow(); };
+  earShow();
+  function loadAsr(){
+    if (asrP) return asrP;
+    asrP = import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3').then(function(T){
+      var gpu = !!navigator.gpu;
+      return T.pipeline('automatic-speech-recognition', 'onnx-community/whisper-small', {
+        device: gpu ? 'webgpu' : 'wasm',
+        dtype: gpu ? { encoder_model: 'fp32', decoder_model_merged: 'q4' } : 'q8'
+      });
+    });
+    return asrP;
+  }
+  async function whisperText(blob){
+    var asr = await loadAsr();
+    var ac = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    var buf = await ac.decodeAudioData(await blob.arrayBuffer());
+    var data = buf.getChannelData(0); try { ac.close(); } catch(x) {}
+    var out = await asr(data, { language: 'japanese', task: 'transcribe', chunk_length_s: 30, stride_length_s: 5 });
+    return String((out && out.text) || '').trim();
+  }
+
   $('#start').onclick = async function(){
+    EAR = $('#earMode').checked;
+    if (EAR) {
+      try {
+        sysStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: { echoCancellation: false, noiseSuppression: false }, systemAudio: 'include', selfBrowserSurface: 'exclude' });
+      } catch (e) { $('#state').textContent = '画面の共有がキャンセルされました。もう一度押すか、「イヤホンのまま録る」を外してください。'; return; }
+      if (!sysStream.getAudioTracks().length) $('#state').textContent = '⚠「システムの音声も共有」にチェックがありませんでした。相手の声は入りません（自分の声だけ録ります）。';
+      loadAsr().catch(function(){});                 // 文字起こしの準備を先に始めておく
+    }
     if (tel) {                                   // 発信（MacではFaceTime → iPhone経由）
       var a = document.createElement('a'); a.href = 'tel:' + tel; document.body.appendChild(a); a.click(); a.remove();
       // 右上に出る「通話」の確認を、Macのショートカット「ACTR_CALL」で自動で押す（入っていなければ何も起きない）
@@ -110,6 +146,14 @@
     }
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true, channelCount: 1 } });
+      micStream = stream;
+      if (EAR && sysStream) {                          // マイク＋Macから出る音を1本に混ぜて録音する
+        mixCtx = new (window.AudioContext || window.webkitAudioContext)();
+        var dest = mixCtx.createMediaStreamDestination();
+        mixCtx.createMediaStreamSource(micStream).connect(dest);
+        if (sysStream.getAudioTracks().length) mixCtx.createMediaStreamSource(new MediaStream(sysStream.getAudioTracks())).connect(dest);
+        stream = dest.stream;
+      }
     } catch (e) {
       $('#state').textContent = 'マイクを使えませんでした：' + e.message + '　アドレスバーのマイクのマークから許可してください。';
       return;
@@ -156,10 +200,16 @@
     try { rec && rec.stop(); } catch(x) {}
     clearInterval(iv);
     $('#stop').disabled = true; $('#stop').textContent = '保存しています…';
-    media.onstop = function(){
-      stream.getTracks().forEach(function(t){ t.stop(); });
+    media.onstop = async function(){
+      [stream, micStream, sysStream].forEach(function(s){ try { s && s.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {} });
+      try { mixCtx && mixCtx.close(); } catch(x) {}
       var blob = new Blob(chunks, { type: media.mimeType || 'audio/webm' });
       var secs = Math.round((Date.now() - t0) / 1000);
+      if (EAR) {                                       // 相手の声も入った録音を、このMacの中で文字起こし
+        $('#stop').textContent = '文字起こししています…（初回は準備に1〜2分）';
+        $('#state').textContent = '通話の録音を文字にしています。このウィンドウは閉じないでください。';
+        try { var wt = await whisperText(blob); if (wt.length > 10) full = wt; } catch (e) { $('#state').textContent = '文字起こしに失敗しました（' + e.message + '）。聞き取れた分だけ送ります。'; }
+      }
       var fr = new FileReader();
       fr.onload = function(){
         var b64 = String(fr.result).split(',')[1];
