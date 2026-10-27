@@ -21,6 +21,10 @@
   #smsBox{display:none;margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:4px}
   #smsBox textarea{width:100%;min-height:90px;font:inherit;padding:8px;border:1px solid var(--line);border-radius:3px;background:var(--panel);color:var(--ink)}
   #smsSend{background:var(--teal);color:#fff;margin-top:6px}
+  #pend .pc{border:2px solid var(--line);border-radius:5px;padding:8px 10px;margin-top:8px;background:var(--panel);font-size:13px}
+  #pend .pc b{font-size:14px}
+  #pend textarea{width:100%;min-height:80px;font:inherit;padding:6px;border:1px solid var(--line);border-radius:3px;margin-top:4px}
+  #pend button{margin-top:6px}
   #longBox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;align-items:center;justify-content:center;padding:16px}
   #longBox .in{background:var(--panel);border:3px solid var(--red);border-radius:6px;padding:16px;max-width:420px;width:100%}
   #longBox button{margin-top:8px}
@@ -50,6 +54,7 @@
     <div class="note" id="smsNote"></div>
   </div>
   <div id="rec"><i></i><span id="clock">00:00</span> 録音・聞き取り中</div>
+  <div id="pend"></div>
   <div id="state">ボタンを押すと、iPhone経由で発信して、録音と聞き取りが同時に始まります。</div>
   <div id="live"></div>
   <div class="note">
@@ -80,6 +85,27 @@
   function send(msg){
     if (okOrigin && window.opener && !window.opener.closed) { window.opener.postMessage(msg, okOrigin); return true; }
     return false;
+  }
+
+  /* 業務ツールの画面を通さず、録音ページから直接ツールに記録する（次の人へ進んだあとでも、その人の電話番号で記録される） */
+  var EXEC = 'https://script.google.com/macros/s/AKfycbxGx6bRU37divN7LHA-fq3CokUwGly3p94D3IX9vIsUC5EfTkp8inxf9g0yxFmHHZN2EA/exec';
+  try { var tu = localStorage.getItem('toolUrl'); if (/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(tu || '')) EXEC = tu; } catch(x) {}
+  function rpc(fn, args){
+    return fetch(EXEC, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ rpc: fn, args: args }) })
+      .then(function(r){ return r.json(); }).then(function(j){ if (j && j.ok) return j.v; throw new Error(j && j.e || 'エラー'); });
+  }
+  /* 「あとでやる」カード：人ごとに分けて残す（次の人の電話を始めても消えない） */
+  function card(who){
+    var d = document.createElement('div'); d.className = 'pc';
+    d.innerHTML = '<b>' + esc(who.name || '（氏名なし）') + '</b>　' + esc(who.tel) + '<div class="st"></div><div class="bd"></div>';
+    $('#pend').insertBefore(d, $('#pend').firstChild);
+    return { el: d, st: function(t){ d.querySelector('.st').textContent = t; }, bd: d.querySelector('.bd'), done: function(){ setTimeout(function(){ d.remove(); }, 6000); } };
+  }
+  function esc(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function resetMain(){
+    $('#rec').style.display = 'none'; $('#stop').style.display = 'none'; $('#noans').style.display = 'none';
+    $('#stop').disabled = false; $('#stop').textContent = '■ 通話終了 → 保存して閉じる';
+    $('#start').style.display = 'block'; $('#live').textContent = ''; $('#clock').textContent = '00:00';
   }
 
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -202,82 +228,81 @@
     try { rec && rec.stop(); } catch(x) {}
     clearInterval(iv);
     $('#stop').disabled = true; $('#stop').textContent = '保存しています…';
+    var who = { tel: tel, name: name }, trLive = full;          // この通話の人と聞き取りを、ここで固定する（このあと次の人に進んでも混ざらない）
     media.onstop = async function(){
       [stream, micStream].forEach(function(s){ try { s && s.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {} });   // 画面共有（相手の声）は止めずに次の電話でも使う
       try { mixCtx && mixCtx.close(); } catch(x) {}
-      var blob = new Blob(chunks, { type: media.mimeType || 'audio/webm' });
+      var blob = new Blob(chunks, { type: media.mimeType || 'audio/webm' }), useEar = EAR;
       var secs = Math.round((Date.now() - t0) / 1000);
-      if (EAR) {                                       // 相手の声も入った録音を、このMacの中で文字起こし
-        $('#stop').textContent = '文字起こししています…（初回は準備に1〜2分）';
-        $('#state').textContent = '通話の録音を文字にしています。このウィンドウは閉じないでください。';
-        try { var wt = await whisperText(blob); if (wt.length > 10) full = wt; } catch (e) { $('#state').textContent = '文字起こしに失敗しました（' + e.message + '）。聞き取れた分だけ送ります。'; }
+      resetMain();
+      $('#state').textContent = '通話を保存しています。業務ツールは先に次の人へ進めてOKです（この人の分は下で続けて記録します）。';
+      var cd = card(who);
+      var tr = trLive;
+      if (useEar) {                                     // 相手の声も入った録音を、このMacの中で文字起こし
+        cd.st('文字起こししています…（このウィンドウは閉じないでください）');
+        try { var wt = await whisperText(blob); if (wt.length > 10) tr = wt; } catch (e) { cd.st('文字起こしに失敗しました（' + e.message + '）。聞き取れた分だけ送ります。'); }
       }
       var fr = new FileReader();
       fr.onload = function(){
         var b64 = String(fr.result).split(',')[1];
-        var ok = send({ type: 'done', transcript: full, audio: b64, mime: blob.type, secs: secs });
-        $('#rec').style.display = 'none'; $('#stop').style.display = 'none'; $('#noans').style.display = 'none';
-        var url = URL.createObjectURL(blob);
-        var txt = URL.createObjectURL(new Blob([full], { type: 'text/plain' }));
+        var msg = { type: 'done', tel: who.tel, name: who.name, transcript: tr, audio: b64, mime: blob.type, secs: secs };
+        var url = URL.createObjectURL(blob), txt = URL.createObjectURL(new Blob([tr], { type: 'text/plain' }));
         var stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
-        $('#after').innerHTML = (ok
-          ? '<div style="text-align:center;padding:18px 8px"><div style="font-size:42px">✅</div><div style="font-size:18px;font-weight:900;margin:6px 0">保存しました</div>'
-            + '<div style="font-size:13px;color:var(--muted)">録音・文字起こしを業務ツールに送りました。<br>AIの要約と記録は業務ツールの画面で自動で進みます。</div>'
-            + '<button id="closeWin" style="margin-top:14px;background:var(--teal);color:#fff">このウィンドウを閉じる</button>'
-            + '<div style="font-size:12px;color:var(--muted);margin-top:6px" id="closeIn">5秒後に自動で閉じます</div></div>'
-          : '<p><b>業務ツールの画面が見つかりませんでした。</b>下のボタンで録音と文字起こしを保存してください。</p>')
-          + '<p><a download="' + stamp + '_' + tel + '.webm" href="' + url + '">録音を保存する</a>　<a download="' + stamp + '_' + tel + '.txt" href="' + txt + '">文字起こしを保存する</a></p>';
-        $('#state').textContent = '終了しました（' + Math.floor(secs / 60) + '分' + (secs % 60) + '秒）。';
-        if (ok && EAR && sysStream) {
-          $('#after').innerHTML = '<div style="text-align:center;padding:14px 8px"><div style="font-size:36px">✅</div><div style="font-size:17px;font-weight:900">保存しました</div><div style="font-size:13px;color:var(--muted);margin-top:4px">🎧 このウィンドウは開いたままにしてください。<br>次の人に「架電する」を押すと、画面共有を聞き直さずにそのまま録音を始めます。</div></div>';
-        } else if (ok) {
-          var cb = document.getElementById('closeWin'); if (cb) cb.onclick = function(){ window.close(); };
-          var left = 5, ci = setInterval(function(){ left--; var e = document.getElementById('closeIn'); if (e) e.textContent = left + '秒後に自動で閉じます'; if (left <= 0) { clearInterval(ci); window.close(); } }, 1000);
+        var dl = '<div><a download="' + stamp + '_' + who.tel + '.webm" href="' + url + '">録音を保存</a>　<a download="' + stamp + '_' + who.tel + '.txt" href="' + txt + '">文字起こしを保存</a></div>';
+        if (send(msg)) {                                // 業務ツールへ（いま同じ人なら画面で要約・判定、別の人ならツールが裏で記録）
+          cd.st('✅ 業務ツールに送りました（' + Math.floor(secs / 60) + '分' + (secs % 60) + '秒）'); cd.done();
+        } else {                                        // 業務ツールの画面が無い → ここから直接記録
+          cd.st('業務ツールに記録しています（要約・判定・進捗シート）…');
+          rpc('通話を後から記録', [{ tel: who.tel, name: who.name, transcript: tr, b64: b64, mime: blob.type, secs: secs }])
+            .then(function(r){ cd.st('✅ 記録しました' + (r && r.verdict ? '（判定：' + r.verdict + '）' : '')); cd.done(); })
+            .catch(function(e){ cd.st('⚠ 記録できませんでした：' + e.message + '。下から録音と文字起こしを保存してください。'); cd.bd.innerHTML = dl; });
         }
+        $('#state').textContent = '次の人の電話は、業務ツールの「架電する」から始められます。';
       };
       fr.readAsDataURL(blob);
     };
     media.stop();
   };
 
-  /* 出なかったとき：録音を捨てて業務ツールに知らせる → 返ってきたSMS文面を、Macのショートカットで送る */
+  /* 出なかったとき：録音を捨てて、この人の電話番号で直接「不在」を記録 → SMSの文面を、この人のカードに出す。
+     カードは次の人の電話を始めても消えないので、SMSはあとで送ってもちゃんとこの人に送られる */
   $('#noans').onclick = function(){
+    var who = { tel: tel, name: name };
     listening = false;
     try { rec && rec.stop(); } catch(x) {}
     clearInterval(iv);
     try { if (media && media.state !== 'inactive') { media.onstop = null; media.stop(); } } catch(x) {}
     try { stream && stream.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {}
-    $('#stop').style.display = 'none'; $('#noans').style.display = 'none'; $('#rec').style.display = 'none';
-    $('#state').textContent = '不在として記録しています…';
-    if (!send({ type: 'noanswer' })) showSms({ to: tel, body: '', err: '業務ツールの画面が見つかりません' });
-    setTimeout(function(){ if ($('#smsBox').style.display !== 'block') showSms({ to: tel, body: '' }); }, 15000);
-  };
-  window.addEventListener('message', function(e){
-    if (!okOrigin || e.origin !== okOrigin) return;
-    var m = e.data || {};
-    if (m.type === 'sms') showSms(m);
-  });
-  function showSms(m){
-    $('#smsBox').style.display = 'block';
-    $('#smsHead').textContent = (m.n ? m.n + '回目の不在　' : '') + 'SMSの文面（直してから送れます）';
-    if (!$('#smsText').value) $('#smsText').value = m.body || '求人ボックスからご応募いただきありがとうございます。株式会社ACT-Rの香川です。先ほどお電話いたしました。ご都合のよい時間をお知らせください。';
-    $('#state').textContent = m.err ? ('記録できませんでした：' + m.err + '（SMSは送れます）') : '不在として記録しました（進捗シートの架電回数・連絡先の名前も更新）。';
-    $('#smsSend').onclick = function(){
-      var to = String(m.to || tel || '').replace(/[^0-9]/g, '');
-      if (!to) { alert('電話番号がありません'); return; }
-      var data = JSON.stringify({ to: to, body: $('#smsText').value });
-      location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent('ACTR_SMS') + '&input=text&text=' + encodeURIComponent(data);
-      setTimeout(function(){ window.close(); }, 4000);
-      $('#smsNote').innerHTML = 'Macの「ショートカット」でSMSを送りました（このウィンドウは4秒後に閉じます）。送れていなければ → <a href="sms:' + to + '&body=' + encodeURIComponent($('#smsText').value) + '">メッセージで開いて手で送る</a>';
+    resetMain();
+    $('#state').textContent = '不在を記録しました。SMSは下のカードからいつでも送れます（業務ツールは先に次の人へ進めてOK）。';
+    var cd = card(who);
+    cd.st('📵 不在として記録しています…');
+    var show = function(r, err){
+      r = r || {};
+      cd.st(err ? '⚠ 記録できませんでした：' + err + '（SMSは送れます）' : '📵 ' + (r.n || 1) + '回目の不在を記録しました');
+      cd.bd.innerHTML = '<textarea></textarea><button style="background:var(--teal);color:#fff">✉ このSMSを送る</button><div class="note"></div>';
+      var ta = cd.bd.querySelector('textarea');
+      ta.value = r.sms || '求人ボックスからご応募いただきありがとうございます。株式会社ACT-Rの香川です。先ほどお電話いたしました。ご都合のよい時間をお知らせください。';
+      cd.bd.querySelector('button').onclick = function(){
+        var to = String(who.tel || '').replace(/[^0-9]/g, '');
+        if (!to) { alert('電話番号がありません'); return; }
+        location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent('ACTR_SMS') + '&input=text&text=' + encodeURIComponent(JSON.stringify({ to: to, body: ta.value }));
+        this.disabled = true; this.textContent = '✅ 送りました';
+        cd.bd.querySelector('.note').innerHTML = '送れていなければ → <a href="sms:' + to + '&body=' + encodeURIComponent(ta.value) + '">メッセージで開いて手で送る</a>';
+        cd.done();
+      };
     };
-  }
-
+    rpc('架電不在', [who.tel, who.name]).then(function(r){
+      show(r);
+      send({ type: 'noanswer', recorded: true, tel: who.tel, name: who.name, n: r && r.n || 1 });
+    }).catch(function(e){ show({}, e.message); });
+  };
   window.addEventListener('hashchange', function(){
     if (listening) return;
     var q2 = new URLSearchParams(location.hash.slice(1));
     tel = (q2.get('tel') || '').replace(/[^0-9]/g, ''); name = q2.get('name') || '';
     $('#who').textContent = (name || '（氏名なし）') + '　' + (tel || '（電話番号なし）');
-    full = ''; chunks = []; $('#live').textContent = ''; $('#after').innerHTML = ''; $('#smsBox').style.display = 'none'; $('#smsText').value = '';
+    full = ''; chunks = []; $('#live').textContent = ''; $('#after').innerHTML = '';   // 前の人のカード（SMS・記録中）は残す
     $('#stop').disabled = false; $('#stop').textContent = '■ 通話終了 → 保存して閉じる';
     $('#start').style.display = 'block';
     if (q2.get('auto') === '1') setTimeout(function(){ $('#start').click(); }, 300);
