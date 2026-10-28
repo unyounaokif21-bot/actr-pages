@@ -166,10 +166,10 @@
     return String((out && out.text) || '').trim();
   }
 
-  var VIA_PHONE = true;
-  try { VIA_PHONE = localStorage.getItem('viaPhone') !== '0'; } catch(x) {}
+  var VIA_PHONE = false;   // ふだんはMacから発信（iPhoneの発信ページは、チェックを入れたときだけ）
+  try { VIA_PHONE = localStorage.getItem('viaPhone2') === '1'; } catch(x) {}
   $('#viaPhone').checked = VIA_PHONE; $('#phoneNote').style.display = VIA_PHONE ? '' : 'none';
-  $('#viaPhone').onchange = function(){ VIA_PHONE = this.checked; $('#phoneNote').style.display = VIA_PHONE ? '' : 'none'; try { localStorage.setItem('viaPhone', VIA_PHONE ? '1' : '0'); } catch(x) {} };
+  $('#viaPhone').onchange = function(){ VIA_PHONE = this.checked; $('#phoneNote').style.display = VIA_PHONE ? '' : 'none'; try { localStorage.setItem('viaPhone2', VIA_PHONE ? '1' : '0'); } catch(x) {} };
   $('#start').onclick = async function(){
     EAR = $('#earMode').checked;
     var sysLive = sysStream && sysStream.getAudioTracks().some(function(t){ return t.readyState === 'live'; });
