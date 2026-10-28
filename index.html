@@ -283,7 +283,7 @@
       cd.bd.innerHTML = '<textarea></textarea><button style="background:var(--teal);color:#fff">' + (r.dup ? '✉ さっき送っていなければ送る' : '✉ このSMSを送る') + '</button><div class="note"></div>';
       if (r.dup) { cd.bd.querySelector('textarea').style.display = 'none'; cd.bd.querySelector('button').style.background = 'var(--muted)'; }
       var ta = cd.bd.querySelector('textarea');
-      ta.value = r.sms || '求人ボックスからご応募いただきありがとうございます。株式会社ACT-Rの香川です。先ほどお電話いたしました。ご都合のよい時間をお知らせください。';
+      ta.value = r.sms || '株式会社ACT-Rの香川です。ご応募いただいたお仕事の件でお電話しました。5分ほどで済みます。お手すきの際にこの番号へ折り返しいただくか、ご都合のよい時間帯をこのSMSにご返信ください（例：「今日18時以降」）。その時間にこちらからおかけします。';
       cd.bd.querySelector('button').onclick = function(){
         var to = String(who.tel || '').replace(/[^0-9]/g, '');
         if (!to) { alert('電話番号がありません'); return; }
