@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>発信｜iPhone</title>
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+  :root{--teal:#0E6E66;--ink:#12212B;--muted:#6B7A85}
+  body{margin:0;font-family:-apple-system,"Hiragino Sans",sans-serif;background:#F4F7F8;color:var(--ink);padding:16px}
+  h1{font-size:18px;margin:0 0 10px}
+  #wait{font-size:15px;color:var(--muted);margin:14px 0}
+  #call{display:none;text-decoration:none;background:var(--teal);color:#fff;border-radius:14px;padding:26px 14px;text-align:center;font-size:24px;font-weight:900;margin:14px 0}
+  #call small{display:block;font-size:17px;font-weight:700;margin-top:6px}
+  #go{width:100%;padding:16px;font-size:17px;font-weight:800;border:0;border-radius:10px;background:var(--ink);color:#fff}
+  .note{font-size:13px;color:var(--muted);line-height:1.6}
+  #log{font-size:13px;margin-top:12px}
+</style>
+</head>
+<body>
+<h1>📱 iPhoneで発信</h1>
+<button id="go">▶ 待ち受けを始める</button>
+<div id="wait"></div>
+<a id="call" href="#"></a>
+<div class="note">Macの録音ページで「📞 発信して記録開始」を押すと、ここに<b>かける人のボタン</b>が出ます。押すとiPhoneから普通に発信します（Macを通さないので、呼び出し音が鳴らない問題が起きません）。<br>
+録音はMacのマイクで取るので、<b>iPhoneはスピーカーにしてMacの近くに</b>置いてください。<br>
+このページは開いたままにしてください（画面は消えないようにしています）。</div>
+<div id="log"></div>
+<script>
+(function(){
+  var EXEC = 'https://script.google.com/macros/s/AKfycbxGx6bRU37divN7LHA-fq3CokUwGly3p94D3IX9vIsUC5EfTkp8inxf9g0yxFmHHZN2EA/exec';
+  var $ = function(s){ return document.querySelector(s); }, last = Date.now() - 60000, lock = null, ac = null, busy = false, on = false;
+  function esc(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function fmt(t){ return t.replace(/^(0[789]0)(\d{4})(\d{4})$/, '$1-$2-$3'); }
+  function beep(){ try { var o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 880; o.connect(g); g.connect(ac.destination); g.gain.value = 0.2; o.start(); o.stop(ac.currentTime + 0.25); } catch(x) {} }
+  async function keepAwake(){ try { if ('wakeLock' in navigator) lock = await navigator.wakeLock.request('screen'); } catch(x) {} }
+  function poll(){
+    if (!on || busy || document.hidden) return; busy = true;
+    fetch(EXEC, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ rpc: 'iPhone発信待ち', args: [last] }) })
+      .then(function(r){ return r.json(); }).then(function(j){
+        $('#wait').textContent = '🟢 待ち受け中（' + new Date().toLocaleTimeString('ja-JP') + ' 確認）';
+        var o = j && j.ok && j.v; if (!o) return;
+        last = o.id;
+        var c = $('#call'); c.href = 'tel:' + o.tel; c.innerHTML = '📞 ' + esc(o.name || '（氏名なし）') + 'さんにかける<small>' + esc(fmt(o.tel)) + '</small>'; c.style.display = 'block';
+        beep();
+        $('#log').innerHTML = '<div>' + new Date(o.id).toLocaleTimeString('ja-JP') + '　' + esc(o.name) + '　' + esc(fmt(o.tel)) + '</div>' + $('#log').innerHTML;
+      }).catch(function(){ $('#wait').textContent = '⚠ 通信できません。電波を確認してください（自動でやり直します）'; })
+      .then(function(){ busy = false; });
+  }
+  $('#call').onclick = function(){ var c = this; setTimeout(function(){ c.style.display = 'none'; }, 1500); };
+  $('#go').onclick = function(){
+    on = true; this.style.display = 'none';
+    try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch(x) {}
+    keepAwake(); poll(); setInterval(poll, 2000);
+  };
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden && on) { keepAwake(); poll(); } });
+})();
+</script>
+</body>
+</html>

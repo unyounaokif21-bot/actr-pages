@@ -48,6 +48,8 @@
   <button id="start">📞 発信して記録開始</button>
   <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:8px"><input type="checkbox" id="earMode" style="width:auto"> 🎧 イヤホンのまま録る（Macから出る音＝相手の声も取り込む）</label>
   <div id="earNote" class="note" style="display:none;margin-top:4px">押すと「画面を共有」が出ます →「画面全体」を選び、<b>「システムの音声も共有」にチェック</b>して「共有」。画面の映像は使わず、音だけ録ります。通話のあと、このMacの中で文字起こしします（無料・外に送りません）。</div>
+  <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:6px"><input type="checkbox" id="viaPhone" style="width:auto"> 📱 iPhoneで発信（Macを通さない・呼び出し音が鳴らない問題が起きない）</label>
+  <div id="phoneNote" class="note" style="display:none;margin-top:4px">iPhoneで <b>unyounaokif21-bot.github.io/actr-pages/call/</b> を開いて「待ち受けを始める」を押しておくと、発信のたびにかける人のボタンが出ます。iPhoneはスピーカーにしてMacの近くに置いてください（Macのマイクで録音します）。</div>
   <button id="stop">■ 通話終了 → 保存して閉じる</button>
   <button id="noans">📵 出なかった（SMSを送る）</button>
   <div id="smsBox">
@@ -164,6 +166,10 @@
     return String((out && out.text) || '').trim();
   }
 
+  var VIA_PHONE = true;
+  try { VIA_PHONE = localStorage.getItem('viaPhone') !== '0'; } catch(x) {}
+  $('#viaPhone').checked = VIA_PHONE; $('#phoneNote').style.display = VIA_PHONE ? '' : 'none';
+  $('#viaPhone').onchange = function(){ VIA_PHONE = this.checked; $('#phoneNote').style.display = VIA_PHONE ? '' : 'none'; try { localStorage.setItem('viaPhone', VIA_PHONE ? '1' : '0'); } catch(x) {} };
   $('#start').onclick = async function(){
     EAR = $('#earMode').checked;
     var sysLive = sysStream && sysStream.getAudioTracks().some(function(t){ return t.readyState === 'live'; });
@@ -174,7 +180,10 @@
       if (!sysStream.getAudioTracks().length) $('#state').textContent = '⚠「システムの音声も共有」にチェックがありませんでした。相手の声は入りません（自分の声だけ録ります）。';
       loadAsr().catch(function(){});                 // 文字起こしの準備を先に始めておく
     }
-    if (tel) {                                   // 発信（MacではFaceTime → iPhone経由）
+    if (tel && VIA_PHONE && !/iPhone|Android/.test(navigator.userAgent)) {   // iPhoneの発信ページに番号を渡す（Macの中継を使わない）
+      rpc('iPhone発信を頼む', [tel, name]).then(function(){ $('#state').textContent = '📱 iPhoneに「' + (name || tel) + 'さんにかける」ボタンを出しました。iPhoneで押してください（録音はもう始まっています）'; })
+        .catch(function(e){ $('#state').textContent = 'iPhoneに送れませんでした：' + e.message + '　iPhoneで番号を押してかけてください：' + tel; });
+    } else if (tel) {                            // 発信（MacではFaceTime → iPhone経由）
       var a = document.createElement('a'); a.href = 'tel:' + tel; document.body.appendChild(a); a.click(); a.remove();
       // 右上に出る「通話」の確認を、Macのショートカット「ACTR_CALL」で自動で押す（入っていなければ何も起きない）
       if (!/iPhone|Android/.test(navigator.userAgent)) setTimeout(function(){
@@ -209,7 +218,7 @@
       $('#clock').textContent = ('0' + Math.floor(s / 60)).slice(-2) + ':' + ('0' + (s % 60)).slice(-2);
     }, 1000);
     $('#start').style.display = 'none'; $('#stop').style.display = 'block'; $('#noans').style.display = 'block'; $('#rec').style.display = 'flex';
-    $('#state').textContent = '録音・聞き取り中です。聞き取った内容は、業務ツールの入力欄に自動で入ります。';
+    $('#state').textContent = (VIA_PHONE && tel ? '📱 iPhoneの発信ページのボタンを押してかけてください。' : '') + '録音・聞き取り中です。聞き取った内容は、業務ツールの入力欄に自動で入ります。';
     send({ type: 'started' });
     ringStart();
   };
