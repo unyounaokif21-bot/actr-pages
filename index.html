@@ -28,6 +28,9 @@
   #longBox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;align-items:center;justify-content:center;padding:16px}
   #longBox .in{background:var(--panel);border:3px solid var(--red);border-radius:6px;padding:16px;max-width:420px;width:100%}
   #longBox button{margin-top:8px}
+  #ringBox{display:none;margin-top:10px;border:3px solid #B26A00;border-radius:6px;padding:10px;background:#FFF8E1}
+  #ringBox b{font-size:16px;color:#B26A00}
+  #ringBox button{margin-top:6px;padding:12px;font-size:15px;font-weight:800}
   #state{margin:10px 0;font-size:13px;color:var(--muted)}
   #rec{display:none;align-items:center;gap:8px;font-weight:800;color:var(--red);margin-top:8px}
   #rec i{width:10px;height:10px;border-radius:50%;background:var(--red);animation:b 1s infinite}
@@ -52,6 +55,12 @@
     <textarea id="smsText"></textarea>
     <button id="smsSend">✉ このSMSを送る</button>
     <div class="note" id="smsNote"></div>
+  </div>
+  <div id="ringBox">
+    <b>📞 呼び出し中… <span id="ringSec">0</span>秒</b>
+    <div style="font-size:13px;margin-top:4px" id="ringMsg">相手が出たら、このまま話してください（録音は始まっています）。<br>このページからは「相手が出たか」は見えません。<b>出ないときは下の「出なかった」</b>を押してください。</div>
+    <button id="ringNo" style="background:#E8A33D;color:#fff">📵 出なかった → 不在で記録・SMS</button>
+    <button id="ringYes" style="background:var(--teal);color:#fff">✅ つながった（この表示を消す）</button>
   </div>
   <div id="rec"><i></i><span id="clock">00:00</span> 録音・聞き取り中</div>
   <div id="pend"></div>
@@ -202,6 +211,7 @@
     $('#start').style.display = 'none'; $('#stop').style.display = 'block'; $('#noans').style.display = 'block'; $('#rec').style.display = 'flex';
     $('#state').textContent = '録音・聞き取り中です。聞き取った内容は、業務ツールの入力欄に自動で入ります。';
     send({ type: 'started' });
+    ringStart();
   };
 
   /* 長すぎる録音の確認：40分たったら「まだ通話中？」を出し、60秒反応がなければ自動で止める */
@@ -223,6 +233,7 @@
   $('#longNo').onclick = function(){ closeLong(); $('#stop').click(); };
 
   $('#stop').onclick = function(){
+    ringStop();
     if (longOpen) closeLong();
     listening = false;
     try { rec && rec.stop(); } catch(x) {}
@@ -264,9 +275,28 @@
     media.stop();
   };
 
+  /* 呼び出し中の表示：発信してから相手が出るまで（ブラウザからは通話の状態が見えないので、秒数と次の操作を出しておく）。
+     30秒で「出ないなら押す」を強調、60秒で音を鳴らして知らせる */
+  var ringIv = null;
+  function ringStop(){ clearInterval(ringIv); ringIv = null; $('#ringBox').style.display = 'none'; }
+  function ringStart(){
+    ringStop();
+    var t1 = Date.now(); $('#ringSec').textContent = '0'; $('#ringBox').style.display = 'block';
+    $('#ringMsg').innerHTML = '相手が出たら、このまま話してください（録音は始まっています）。<br>このページからは「相手が出たか」は見えません。<b>出ないときは下の「出なかった」</b>を押してください。';
+    ringIv = setInterval(function(){
+      var s = Math.floor((Date.now() - t1) / 1000); $('#ringSec').textContent = s;
+      if (s === 30) $('#ringMsg').innerHTML = '<b style="color:#C62828">30秒たちました。呼び出し音が鳴っていない・出ないなら「出なかった」を押してください。</b><br>電話アプリが「発信中」のまま無音なら、iPhoneにつながっていない可能性があります（iPhoneのロック解除・同じWi-Fi・Bluetoothを確認）。';
+      if (s === 60) { try { var ac = new (window.AudioContext || window.webkitAudioContext)(), o = ac.createOscillator(); o.frequency.value = 660; o.connect(ac.destination); o.start(); setTimeout(function(){ o.stop(); ac.close(); }, 300); } catch(x) {} }
+      if (s > 600) ringStop();
+    }, 1000);
+  }
+  $('#ringNo').onclick = function(){ ringStop(); $('#noans').click(); };
+  $('#ringYes').onclick = function(){ ringStop(); };
+
   /* 出なかったとき：録音を捨てて、この人の電話番号で直接「不在」を記録 → SMSの文面を、この人のカードに出す。
      カードは次の人の電話を始めても消えないので、SMSはあとで送ってもちゃんとこの人に送られる */
   $('#noans').onclick = function(){
+    ringStop();
     var who = { tel: tel, name: name };
     listening = false;
     try { rec && rec.stop(); } catch(x) {}
