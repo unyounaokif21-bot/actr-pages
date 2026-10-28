@@ -39,6 +39,8 @@
     }
     window.google = { script: { run: run(null, null), host: { close: function(){}, setHeight: function(){} } } };
   }
+  // 画面のHTMLと同時に「電話の順番」も取りに行く（画面が出たらすぐ1人目を入れるため）
+  try { window.__QP = fetch(u, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ rpc: '架電キュー', args: [[]] }) }).then(function(r){ return r.json(); }); window.__QP.catch(function(){}); } catch (e) {}
   fetch(u + '?' + qs.toString()).then(function(r){ return r.text(); }).then(function(html){
     if (!/<html/i.test(html)) throw new Error('画面を取得できませんでした');
     var head = '<link rel="icon" type="image/png" sizes="32x32" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-32.png"><link rel="icon" type="image/png" sizes="512x512" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-512.png"><link rel="apple-touch-icon" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-180.png"><title>業務ツール</title><script>(' + shim.toString() + ')(' + JSON.stringify(u) + ');<\/script>';
