@@ -12,8 +12,12 @@
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;padding:14px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:14px;max-width:560px;margin:0 auto}
-  h1{font-size:16px;margin:0 0 2px}
-  .who{font-size:14px;color:var(--muted);margin-bottom:12px}
+  h1{font-size:12px;margin:0 0 2px;color:var(--muted);font-weight:700}
+  .who{font-size:21px;font-weight:900;margin-bottom:6px;line-height:1.35}
+  .who small{display:block;font-size:14px;font-weight:600;color:var(--muted);letter-spacing:.02em}
+  details.fold{margin-top:10px;font-size:13px;border-top:1px solid var(--line);padding-top:6px}
+  details.fold>summary{cursor:pointer;color:var(--muted);font-weight:700}
+  #pendHead{display:none;margin-top:14px;font-size:13px;font-weight:800;color:#B26A00}
   button{font:inherit;font-weight:800;border-radius:4px;border:0;padding:14px;width:100%;cursor:pointer}
   #start{background:var(--teal);color:#fff;font-size:17px}
   #stop{background:var(--red);color:#fff;font-size:17px;display:none}
@@ -21,20 +25,25 @@
   #smsBox{display:none;margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:4px}
   #smsBox textarea{width:100%;min-height:90px;font:inherit;padding:8px;border:1px solid var(--line);border-radius:3px;background:var(--panel);color:var(--ink)}
   #smsSend{background:var(--teal);color:#fff;margin-top:6px}
-  #pend .pc{border:2px solid var(--line);border-radius:5px;padding:8px 10px;margin-top:8px;background:var(--panel);font-size:13px}
-  #pend .pc b{font-size:14px}
-  #pend textarea{width:100%;min-height:80px;font:inherit;padding:6px;border:1px solid var(--line);border-radius:3px;margin-top:4px}
-  #pend button{margin-top:6px}
+  #pend .pc{border:1px solid var(--line);border-left:4px solid #E8A33D;border-radius:4px;padding:7px 9px;margin-top:6px;background:var(--panel);font-size:13px}
+  #pend .pc .hd{display:flex;align-items:center;gap:8px}
+  #pend .pc .hd b{font-size:14px}
+  #pend .pc .st{flex:1;color:var(--muted);font-size:12px}
+  #pend .pc .go{width:auto;padding:7px 12px;font-size:13px;background:var(--teal);color:#fff;flex:none}
+  #pend .pc details{margin-top:4px}
+  #pend .pc details summary{cursor:pointer;font-size:12px;color:var(--muted)}
+  #pend textarea{width:100%;min-height:80px;font:inherit;font-size:13px;padding:6px;border:1px solid var(--line);border-radius:3px;margin-top:4px;background:var(--panel);color:var(--ink)}
   #longBox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;align-items:center;justify-content:center;padding:16px}
   #longBox .in{background:var(--panel);border:3px solid var(--red);border-radius:6px;padding:16px;max-width:420px;width:100%}
   #longBox button{margin-top:8px}
-  #ringBox{display:none;margin-top:10px;border:3px solid #B26A00;border-radius:6px;padding:10px;background:#FFF8E1}
+  #ringBox{display:none;margin-top:10px;border:3px solid #B26A00;border-radius:6px;padding:10px;background:#FFF8E1;color:#3A2A00}
   #ringBox b{font-size:16px;color:#B26A00}
   #ringBox button{margin-top:6px;padding:12px;font-size:15px;font-weight:800}
   #state{margin:10px 0;font-size:13px;color:var(--muted)}
   #rec{display:none;align-items:center;gap:8px;font-weight:800;color:var(--red);margin-top:8px}
   #rec i{width:10px;height:10px;border-radius:50%;background:var(--red);animation:b 1s infinite}
   @keyframes b{50%{opacity:.2}}
+  #live:empty{display:none}
   #live{white-space:pre-wrap;background:var(--bg);border-radius:3px;padding:10px;min-height:120px;max-height:45vh;overflow:auto;font-size:13.5px;margin-top:10px}
   .note{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6}
   a{color:var(--teal)}
@@ -45,13 +54,16 @@
 <div class="card">
   <h1>通話の録音・聞き取り</h1>
   <div class="who" id="who"></div>
-  <div id="step" style="display:none;margin:4px 0 6px;padding:6px 9px;background:#FFF3E0;border-left:4px solid #E8A33D;font-weight:800;font-size:14px"></div>
+  <div id="step" style="display:none;margin:4px 0 8px;padding:7px 10px;background:#FFF3E0;color:#5C3A00;border-left:4px solid #E8A33D;font-weight:800;font-size:14px;border-radius:3px"></div>
   <button id="start">📞 発信して記録開始</button>
+  <div id="viaBadge" style="display:none;margin-top:6px;font-size:12.5px;font-weight:800;color:#1565C0">📱 iPhoneで発信する設定になっています</div>
+  <details class="fold" id="setFold"><summary>⚙ 設定（iPhoneで発信・イヤホン・テスト発信）</summary>
   <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:8px"><input type="checkbox" id="earMode" style="width:auto"> 🎧 イヤホンのまま録る（Macから出る音＝相手の声も取り込む）</label>
   <div id="earNote" class="note" style="display:none;margin-top:4px">押すと「画面を共有」が出ます →「画面全体」を選び、<b>「システムの音声も共有」にチェック</b>して「共有」。画面の映像は使わず、音だけ録ります。通話のあと、このMacの中で文字起こしします（無料・外に送りません）。</div>
   <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:6px"><input type="checkbox" id="viaPhone" style="width:auto"> 📱 iPhoneで発信（Macを通さない・呼び出し音が鳴らない問題が起きない）</label>
   <div id="phoneNote" class="note" style="display:none;margin-top:4px">iPhoneで <b>unyounaokif21-bot.github.io/actr-pages/call/</b> を開いて「待ち受けを始める」を押しておくと、発信のたびにかける人のボタンが出ます。iPhoneはスピーカーにしてMacの近くに置いてください（Macのマイクで録音します）。</div>
-  <button id="testDial" type="button" style="background:#fff;color:#1565C0;border:2px solid #1565C0;font-size:14px;padding:9px">🧪 自分の携帯にテスト発信（090-5701-5693）</button>
+  <button id="testDial" type="button" style="margin-top:8px;background:#fff;color:#1565C0;border:2px solid #1565C0;font-size:14px;padding:9px">🧪 自分の携帯にテスト発信（090-5701-5693）</button>
+  </details>
   <div id="testNote" class="note" style="display:none;margin-top:4px"></div>
   <button id="stop">■ 通話終了 → 保存して閉じる</button>
   <button id="noans">📵 出なかった（1回目ならSMS／SMSのあとの2回目なら記録だけ）</button>
@@ -68,15 +80,16 @@
     <button id="ringYes" style="background:var(--teal);color:#fff">✅ つながった（この表示を消す）</button>
   </div>
   <div id="rec"><i></i><span id="clock">00:00</span> 録音・聞き取り中</div>
+  <div id="pendHead">✉ SMSがまだの人</div>
   <div id="pend"></div>
   <div id="state">ボタンを押すと、iPhone経由で発信して、録音と聞き取りが同時に始まります。</div>
   <div id="live"></div>
-  <div class="note">
+  <details class="fold"><summary>📝 使い方のメモ</summary><div class="note" style="margin-top:4px">
     ・イヤホンは外して、Macのスピーカーで話してください（相手の声も録音・聞き取りするため）。<br>
     ・<b>音を出せない場所では</b>、このページではなく<b>iPhoneの通話録音</b>を使ってください（業務ツールの「📱 iPhoneの通話録音で記録する」から取り込めます）。<br>
     ・最初に「サービス向上のため、この通話は録音させていただいております」と一言伝えてください。<br>
     ・このウィンドウは通話が終わるまで閉じないでください。
-  </div>
+  </div></details>
   <div id="after"></div>
   <div id="longBox"><div class="in">
     <div style="font-weight:900;color:var(--red);font-size:16px">⏱ 録音が<span id="longMin">40</span>分を超えました</div>
@@ -94,7 +107,7 @@
   var origin = q.get('origin') || '';
   // 送り先は業務ツール（Google Apps Script の画面）だけに限る
   var okOrigin = (/^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(origin) || origin === "https://unyounaokif21-bot.github.io") ? origin : "";
-  $('#who').textContent = (name || '（氏名なし）') + '　' + (tel || '（電話番号なし）');
+  $('#who').innerHTML = esc(name || '（氏名なし）') + '<small>' + esc(tel ? tel.replace(/^(\d{3})(\d{4})(\d+)$/, '$1-$2-$3') : '電話番号なし') + '</small>';
   stepShow(q.get('step'));
 
   /* 発信：「📱 iPhoneで発信」がオンならiPhoneの発信ページへ、オフならMacから（tel: → ショートカット ACTR_CALL で「通話」を押す） */
@@ -133,17 +146,18 @@
   }
   /* 「あとでやる」カード：人ごとに分けて残す（次の人の電話を始めても消えない） */
   function card(who){
-    var d = document.createElement('details'); d.className = 'pc'; d.open = true; d.dataset.tel = who.tel;
-    d.innerHTML = '<summary style="cursor:pointer"><b>' + esc(who.name || '（氏名なし）') + '</b>　' + esc(who.tel) + '<span class="st" style="display:block;font-weight:400"></span></summary><div class="bd"></div>';
-    $('#pend').insertBefore(d, $('#pend').firstChild);
-    return { el: d, st: function(t){ d.querySelector('.st').textContent = t; }, bd: d.querySelector('.bd'), done: function(){ setTimeout(function(){ d.remove(); }, 6000); } };
+    var d = document.createElement('div'); d.className = 'pc'; d.dataset.tel = who.tel;
+    d.innerHTML = '<div class="hd"><b>' + esc(who.name || '（氏名なし）') + '</b><span class="st"></span></div><div class="bd"></div>';
+    $('#pend').insertBefore(d, $('#pend').firstChild); pendCount();
+    return { el: d, st: function(t){ d.querySelector('.st').textContent = t; }, bd: d.querySelector('.bd'), done: function(){ setTimeout(function(){ d.remove(); pendCount(); }, 4000); } };
   }
   /* 電話・ショートカットを開く。ページは離れないので、このあと3秒は「このサイトを離れますか？」を出さない */
   var EXT_UNTIL = 0;
   function openExt(url){ EXT_UNTIL = Date.now() + 3000; var a = document.createElement('a'); a.href = url; document.body.appendChild(a); a.click(); a.remove(); }
   function esc(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
   /* 新しい人に移ったら、前の人のカードは閉じて1行にする */
-  function foldOld(){ document.querySelectorAll('#pend details.pc').forEach(function(d){ if (d.dataset.tel !== tel) d.open = false; }); }
+  function foldOld(){ document.querySelectorAll('#pend .pc details').forEach(function(d){ d.open = false; }); }
+  function pendCount(){ var n = document.querySelectorAll('#pend .pc').length; $('#pendHead').style.display = n ? 'block' : 'none'; $('#pendHead').textContent = '✉ SMSがまだの人（' + n + '人）'; }
   function resetMain(){
     $('#rec').style.display = 'none'; $('#stop').style.display = 'none'; $('#noans').style.display = 'none';
     $('#stop').disabled = false; $('#stop').textContent = '■ 通話終了 → 保存して閉じる';
@@ -200,7 +214,8 @@
   var VIA_PHONE = false;   // ふだんはMacから発信（iPhoneの発信ページは、チェックを入れたときだけ）
   try { VIA_PHONE = localStorage.getItem('viaPhone2') === '1'; } catch(x) {}
   $('#viaPhone').checked = VIA_PHONE; $('#phoneNote').style.display = VIA_PHONE ? '' : 'none';
-  $('#viaPhone').onchange = function(){ VIA_PHONE = this.checked; $('#phoneNote').style.display = VIA_PHONE ? '' : 'none'; try { localStorage.setItem('viaPhone2', VIA_PHONE ? '1' : '0'); } catch(x) {} };
+  $('#viaBadge').style.display = VIA_PHONE ? 'block' : 'none';
+  $('#viaPhone').onchange = function(){ VIA_PHONE = this.checked; $('#viaBadge').style.display = VIA_PHONE ? 'block' : 'none'; $('#phoneNote').style.display = VIA_PHONE ? '' : 'none'; try { localStorage.setItem('viaPhone2', VIA_PHONE ? '1' : '0'); } catch(x) {} };
   $('#start').onclick = async function(){
     EAR = $('#earMode').checked;
     var sysLive = sysStream && sysStream.getAudioTracks().some(function(t){ return t.readyState === 'live'; });
@@ -337,23 +352,25 @@
     try { if (media && media.state !== 'inactive') { media.onstop = null; media.stop(); } } catch(x) {}
     try { stream && stream.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {}
     resetMain();
-    $('#state').textContent = '不在を記録しました。SMSは下のカードからいつでも送れます（業務ツールは先に次の人へ進めてOK）。';
+    $('#state').textContent = '不在を記録しています…';
     var cd = card(who);
     cd.st('📵 不在として記録しています…');
     var show = function(r, err){
       r = r || {};
       if (r.second) {                                   // セットの2回目（SMSのあとの「もう一回」）も出なかった → SMSは送らない
-        cd.st('📵 ' + (r.msg || 'セットの2回目も不在（SMSは送りません）'));
-        cd.bd.innerHTML = ''; cd.done();
+        cd.el.remove(); pendCount();
         $('#state').textContent = '📵 ' + (r.msg || 'セットの2回目も不在');
         return;
       }
-      cd.st(err ? '⚠ 記録できませんでした：' + err + '（SMSは送れます）' : r.dup ? '📵 ' + (r.msg || 'この人の不在は記録済みです') : '📵 セット' + (r.set || 1) + 'の1回目：不在 → SMSを送って、すぐもう一回かけてください');
-      cd.bd.innerHTML = '<textarea></textarea><button style="background:var(--teal);color:#fff">' + (r.dup ? '✉ さっき送っていなければ送る' : '✉ このSMSを送る') + '</button><div class="note"></div>';
-      if (r.dup) { cd.bd.querySelector('textarea').style.display = 'none'; cd.bd.querySelector('button').style.background = 'var(--muted)'; }
+      cd.st(err ? '⚠ 記録できませんでした：' + err + '（SMSは送れます）' : r.dup ? '📵 ' + (r.msg || 'この人の不在は記録済みです') : '📵 セット' + (r.set || 1) + '・1回目 不在');
+      if (!err && !r.dup) $('#state').innerHTML = '<b style="color:#B26A00">📵 ' + esc(who.name || '') + 'さん：SMSを送ったら、すぐもう一回かけてください（セットの2回目）</b>';
+      var go = document.createElement('button'); go.className = 'go'; go.textContent = r.dup ? '✉ 送っていなければ送る' : '✉ SMSを送る';
+      cd.el.querySelector('.hd').appendChild(go);
+      cd.bd.innerHTML = '<details><summary>文面を見る・直す</summary><textarea></textarea></details><div class="note" style="margin-top:2px"></div>';
+      if (r.dup) go.style.background = 'var(--muted)';
       var ta = cd.bd.querySelector('textarea');
       ta.value = r.sms || '株式会社ACT-Rの香川です。ご応募いただいたお仕事の件でお電話しました。5分ほどで済みます。お手すきの際にこの番号へ折り返しいただくか、ご都合のよい時間帯をこのSMSにご返信ください（例：「今日18時以降」）。その時間にこちらからおかけします。';
-      cd.bd.querySelector('button').onclick = function(){
+      go.onclick = function(){
         var to = String(who.tel || '').replace(/[^0-9]/g, '');
         if (!to) { alert('電話番号がありません'); return; }
         var sent = {}; try { sent = JSON.parse(localStorage.getItem('smsSent') || '{}'); } catch(x) {}
@@ -361,7 +378,7 @@
         sent[to] = Date.now(); try { localStorage.setItem('smsSent', JSON.stringify(sent)); } catch(x) {}
         openExt('shortcuts://run-shortcut?name=' + encodeURIComponent('ACTR_SMS') + '&input=text&text=' + encodeURIComponent(JSON.stringify({ to: to, body: ta.value })));
         this.disabled = true; this.textContent = '✅ 送りました';
-        cd.bd.querySelector('.note').innerHTML = '送れていなければ → <a href="sms:' + to + '&body=' + encodeURIComponent(ta.value) + '">メッセージで開いて手で送る</a>';
+        cd.st('✅ SMSを送りました'); cd.bd.querySelector('.note').innerHTML = '送れていなければ → <a href="sms:' + to + '&body=' + encodeURIComponent(ta.value) + '">メッセージで開いて手で送る</a>';
         cd.done();
       };
     };
@@ -374,7 +391,7 @@
     if (listening) return;
     var q2 = new URLSearchParams(location.hash.slice(1));
     tel = (q2.get('tel') || '').replace(/[^0-9]/g, ''); name = q2.get('name') || '';
-    $('#who').textContent = (name || '（氏名なし）') + '　' + (tel || '（電話番号なし）');
+    $('#who').innerHTML = esc(name || '（氏名なし）') + '<small>' + esc(tel ? tel.replace(/^(\d{3})(\d{4})(\d+)$/, '$1-$2-$3') : '電話番号なし') + '</small>';
     full = ''; chunks = []; $('#live').textContent = ''; $('#after').innerHTML = '';   // 前の人のカード（SMS・記録中）は残すが、1行にたたむ
     foldOld(); stepShow(q2.get('step'));
     $('#stop').disabled = false; $('#stop').textContent = '■ 通話終了 → 保存して閉じる';
