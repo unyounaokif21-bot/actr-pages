@@ -187,6 +187,7 @@
 
   /* 🎧 イヤホンのまま録る：画面共有の「システムの音声」で相手の声を取り込み、マイクと混ぜて録音。文字起こしは通話後にこのMacの中のWhisperで */
   var EAR = false, sysStream = null, micStream = null, mixCtx = null, asrP = null;
+  try { if (q.has('ear')) localStorage.setItem('earMode', q.get('ear') === '1' ? '1' : ''); } catch(x) {}   // チャットの「始める」から、イヤホンで録るかを決めて開く
   try { $('#earMode').checked = localStorage.getItem('earMode') === '1'; } catch(x) {}
   var earShow = function(){ $('#earNote').style.display = $('#earMode').checked ? 'block' : 'none'; };
   $('#earMode').onchange = function(){ try { localStorage.setItem('earMode', this.checked ? '1' : ''); } catch(x) {} earShow(); };
