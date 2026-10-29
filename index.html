@@ -53,7 +53,7 @@
   <button id="testDial" type="button" style="background:#fff;color:#1565C0;border:2px solid #1565C0;font-size:14px;padding:9px">🧪 自分の携帯にテスト発信（090-5701-5693）</button>
   <div id="testNote" class="note" style="display:none;margin-top:4px"></div>
   <button id="stop">■ 通話終了 → 保存して閉じる</button>
-  <button id="noans">📵 出なかった（SMSを送る）</button>
+  <button id="noans">📵 出なかった（1回目ならSMS／SMSのあとの2回目なら記録だけ）</button>
   <div id="smsBox">
     <div style="font-weight:800;margin-bottom:4px" id="smsHead">SMSの文面</div>
     <textarea id="smsText"></textarea>
@@ -335,7 +335,13 @@
     cd.st('📵 不在として記録しています…');
     var show = function(r, err){
       r = r || {};
-      cd.st(err ? '⚠ 記録できませんでした：' + err + '（SMSは送れます）' : r.dup ? '📵 ' + (r.msg || 'この人の不在は記録済みです') : '📵 ' + (r.n || 1) + '回目の不在を記録しました');
+      if (r.second) {                                   // セットの2回目（SMSのあとの「もう一回」）も出なかった → SMSは送らない
+        cd.st('📵 ' + (r.msg || 'セットの2回目も不在（SMSは送りません）'));
+        cd.bd.innerHTML = ''; cd.done();
+        $('#state').textContent = '📵 ' + (r.msg || 'セットの2回目も不在');
+        return;
+      }
+      cd.st(err ? '⚠ 記録できませんでした：' + err + '（SMSは送れます）' : r.dup ? '📵 ' + (r.msg || 'この人の不在は記録済みです') : '📵 セット' + (r.set || 1) + 'の1回目：不在 → SMSを送って、すぐもう一回かけてください');
       cd.bd.innerHTML = '<textarea></textarea><button style="background:var(--teal);color:#fff">' + (r.dup ? '✉ さっき送っていなければ送る' : '✉ このSMSを送る') + '</button><div class="note"></div>';
       if (r.dup) { cd.bd.querySelector('textarea').style.display = 'none'; cd.bd.querySelector('button').style.background = 'var(--muted)'; }
       var ta = cd.bd.querySelector('textarea');
@@ -354,7 +360,7 @@
     };
     rpc('架電不在', [who.tel, who.name]).then(function(r){
       show(r);
-      send({ type: 'noanswer', recorded: true, tel: who.tel, name: who.name, n: r && r.n || 1 });
+      send({ type: 'noanswer', recorded: true, tel: who.tel, name: who.name, n: r && r.n || 1, second: !!(r && r.second), msg: r && r.msg || '' });
     }).catch(function(e){ show({}, e.message); });
   };
   window.addEventListener('hashchange', function(){
