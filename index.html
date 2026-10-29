@@ -45,6 +45,7 @@
 <div class="card">
   <h1>通話の録音・聞き取り</h1>
   <div class="who" id="who"></div>
+  <div id="step" style="display:none;margin:4px 0 6px;padding:6px 9px;background:#FFF3E0;border-left:4px solid #E8A33D;font-weight:800;font-size:14px"></div>
   <button id="start">📞 発信して記録開始</button>
   <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:8px"><input type="checkbox" id="earMode" style="width:auto"> 🎧 イヤホンのまま録る（Macから出る音＝相手の声も取り込む）</label>
   <div id="earNote" class="note" style="display:none;margin-top:4px">押すと「画面を共有」が出ます →「画面全体」を選び、<b>「システムの音声も共有」にチェック</b>して「共有」。画面の映像は使わず、音だけ録ります。通話のあと、このMacの中で文字起こしします（無料・外に送りません）。</div>
@@ -94,6 +95,7 @@
   // 送り先は業務ツール（Google Apps Script の画面）だけに限る
   var okOrigin = (/^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(origin) || origin === "https://unyounaokif21-bot.github.io") ? origin : "";
   $('#who').textContent = (name || '（氏名なし）') + '　' + (tel || '（電話番号なし）');
+  stepShow(q.get('step'));
 
   /* 発信：「📱 iPhoneで発信」がオンならiPhoneの発信ページへ、オフならMacから（tel: → ショートカット ACTR_CALL で「通話」を押す） */
   function dialTel(t, nm, say){
@@ -102,10 +104,8 @@
         .catch(function(e){ say('iPhoneに送れませんでした：' + e.message + '　iPhoneで番号を押してかけてください：' + t); });
       return;
     }
-    var a = document.createElement('a'); a.href = 'tel:' + t; document.body.appendChild(a); a.click(); a.remove();
-    if (!/iPhone|Android/.test(navigator.userAgent)) setTimeout(function(){
-      var b = document.createElement('a'); b.href = 'shortcuts://run-shortcut?name=ACTR_CALL'; document.body.appendChild(b); b.click(); b.remove();
-    }, 400);
+    openExt('tel:' + t);
+    if (!/iPhone|Android/.test(navigator.userAgent)) setTimeout(function(){ openExt('shortcuts://run-shortcut?name=ACTR_CALL'); }, 400);
   }
   /* 🧪 テスト発信：自分の携帯にかけて、電話の仕組みが動くか確かめる（録音・架電履歴には残さない） */
   var MY_TEL = '09057015693';
@@ -133,12 +133,17 @@
   }
   /* 「あとでやる」カード：人ごとに分けて残す（次の人の電話を始めても消えない） */
   function card(who){
-    var d = document.createElement('div'); d.className = 'pc';
-    d.innerHTML = '<b>' + esc(who.name || '（氏名なし）') + '</b>　' + esc(who.tel) + '<div class="st"></div><div class="bd"></div>';
+    var d = document.createElement('details'); d.className = 'pc'; d.open = true; d.dataset.tel = who.tel;
+    d.innerHTML = '<summary style="cursor:pointer"><b>' + esc(who.name || '（氏名なし）') + '</b>　' + esc(who.tel) + '<span class="st" style="display:block;font-weight:400"></span></summary><div class="bd"></div>';
     $('#pend').insertBefore(d, $('#pend').firstChild);
     return { el: d, st: function(t){ d.querySelector('.st').textContent = t; }, bd: d.querySelector('.bd'), done: function(){ setTimeout(function(){ d.remove(); }, 6000); } };
   }
+  /* 電話・ショートカットを開く。ページは離れないので、このあと3秒は「このサイトを離れますか？」を出さない */
+  var EXT_UNTIL = 0;
+  function openExt(url){ EXT_UNTIL = Date.now() + 3000; var a = document.createElement('a'); a.href = url; document.body.appendChild(a); a.click(); a.remove(); }
   function esc(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  /* 新しい人に移ったら、前の人のカードは閉じて1行にする */
+  function foldOld(){ document.querySelectorAll('#pend details.pc').forEach(function(d){ if (d.dataset.tel !== tel) d.open = false; }); }
   function resetMain(){
     $('#rec').style.display = 'none'; $('#stop').style.display = 'none'; $('#noans').style.display = 'none';
     $('#stop').disabled = false; $('#stop').textContent = '■ 通話終了 → 保存して閉じる';
@@ -305,9 +310,11 @@
      30秒で「出ないなら押す」を強調、60秒で音を鳴らして知らせる */
   var ringIv = null;
   function ringStop(){ clearInterval(ringIv); ringIv = null; $('#ringBox').style.display = 'none'; }
+  /* 何回目の電話か（業務ツールから step= で渡される）を名前の下に大きく出す */
+  function stepShow(st){ var e = $('#step'); if (!e) return; e.style.display = st ? 'block' : 'none'; e.textContent = st || ''; }
   function ringStart(){
     ringStop();
-    var t1 = Date.now(); $('#ringSec').textContent = '0'; $('#ringBox').style.display = 'block';
+    var t1 = Date.now(); $('#ringSec').textContent = '0'; $('#ringBox').style.display = 'block'; $('#noans').style.display = 'none';
     $('#ringMsg').innerHTML = '相手が出たら、このまま話してください（録音は始まっています）。<br>このページからは「相手が出たか」は見えません。<b>出ないときは下の「出なかった」</b>を押してください。';
     ringIv = setInterval(function(){
       var s = Math.floor((Date.now() - t1) / 1000); $('#ringSec').textContent = s;
@@ -317,7 +324,7 @@
     }, 1000);
   }
   $('#ringNo').onclick = function(){ ringStop(); $('#noans').click(); };
-  $('#ringYes').onclick = function(){ ringStop(); };
+  $('#ringYes').onclick = function(){ ringStop(); if (listening) $('#noans').style.display = 'block'; };
 
   /* 出なかったとき：録音を捨てて、この人の電話番号で直接「不在」を記録 → SMSの文面を、この人のカードに出す。
      カードは次の人の電話を始めても消えないので、SMSはあとで送ってもちゃんとこの人に送られる */
@@ -352,7 +359,7 @@
         var sent = {}; try { sent = JSON.parse(localStorage.getItem('smsSent') || '{}'); } catch(x) {}
         if (sent[to] && Date.now() - sent[to] < 30 * 60000 && !confirm(Math.round((Date.now() - sent[to]) / 60000) + '分前にこの人へSMSを送っています。もう一度送りますか？')) return;
         sent[to] = Date.now(); try { localStorage.setItem('smsSent', JSON.stringify(sent)); } catch(x) {}
-        location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent('ACTR_SMS') + '&input=text&text=' + encodeURIComponent(JSON.stringify({ to: to, body: ta.value }));
+        openExt('shortcuts://run-shortcut?name=' + encodeURIComponent('ACTR_SMS') + '&input=text&text=' + encodeURIComponent(JSON.stringify({ to: to, body: ta.value })));
         this.disabled = true; this.textContent = '✅ 送りました';
         cd.bd.querySelector('.note').innerHTML = '送れていなければ → <a href="sms:' + to + '&body=' + encodeURIComponent(ta.value) + '">メッセージで開いて手で送る</a>';
         cd.done();
@@ -368,12 +375,13 @@
     var q2 = new URLSearchParams(location.hash.slice(1));
     tel = (q2.get('tel') || '').replace(/[^0-9]/g, ''); name = q2.get('name') || '';
     $('#who').textContent = (name || '（氏名なし）') + '　' + (tel || '（電話番号なし）');
-    full = ''; chunks = []; $('#live').textContent = ''; $('#after').innerHTML = '';   // 前の人のカード（SMS・記録中）は残す
+    full = ''; chunks = []; $('#live').textContent = ''; $('#after').innerHTML = '';   // 前の人のカード（SMS・記録中）は残すが、1行にたたむ
+    foldOld(); stepShow(q2.get('step'));
     $('#stop').disabled = false; $('#stop').textContent = '■ 通話終了 → 保存して閉じる';
     $('#start').style.display = 'block';
     if (q2.get('auto') === '1') setTimeout(function(){ $('#start').click(); }, 300);
   });
-  window.addEventListener('beforeunload', function(e){ if (listening) { e.preventDefault(); e.returnValue = ''; } });
+  window.addEventListener('beforeunload', function(e){ if (listening && Date.now() > EXT_UNTIL) { e.preventDefault(); e.returnValue = ''; } });
   // 業務ツールの「優先順に電話」から開いたときは、そのまま発信・録音を始める（ブラウザに止められたらボタンを押す）
   if (q.get('auto') === '1') {
     $('#state').textContent = '発信と録音を始めています…（始まらないときは上のボタンを押してください）';
