@@ -80,10 +80,17 @@
     <button id="ringYes" style="background:var(--teal);color:#fff">✅ つながった（この表示を消す）</button>
   </div>
   <div id="rec"><i></i><span id="clock">00:00</span> 録音・聞き取り中</div>
+  <div id="sysMeter" style="display:none;margin-top:6px;font-size:13px;font-weight:700"></div>
   <div id="pendHead">✉ SMSがまだの人</div>
   <div id="pend"></div>
   <div id="state">ボタンを押すと、iPhone経由で発信して、録音と聞き取りが同時に始まります。</div>
   <div id="live"></div>
+  <details class="fold"><summary>⚠ 相手の声が入らないとき（イヤホンのまま録る）</summary><div class="note" style="margin-top:4px">
+    ・通話中に「🎧 相手の声」のメーターが動いていれば、相手の声は録音に入っています。<br>
+    ・メーターが動かないときは、Macの<b>システム設定 → プライバシーとセキュリティ → 画面とシステムオーディオ収録</b>で、Google Chrome がオンになっているか確かめてください（オンにしたらChromeを再起動）。<br>
+    ・画面共有のとき「画面全体」を選び、<b>「システムの音声も共有」</b>にチェックしてください。タブやウィンドウを選ぶと相手の声は入りません。<br>
+    ・それでも入らないときは、イヤホンを外してMacのスピーカーで話すか、iPhoneの通話録音を使ってください。
+  </div></details>
   <details class="fold"><summary>📝 使い方のメモ</summary><div class="note" style="margin-top:4px">
     ・イヤホンは外して、Macのスピーカーで話してください（相手の声も録音・聞き取りするため）。<br>
     ・<b>音を出せない場所では</b>、このページではなく<b>iPhoneの通話録音</b>を使ってください（業務ツールの「📱 iPhoneの通話録音で記録する」から取り込めます）。<br>
@@ -235,7 +242,10 @@
         mixCtx = new (window.AudioContext || window.webkitAudioContext)();
         var dest = mixCtx.createMediaStreamDestination();
         mixCtx.createMediaStreamSource(micStream).connect(dest);
-        if (sysStream.getAudioTracks().length) mixCtx.createMediaStreamSource(new MediaStream(sysStream.getAudioTracks())).connect(dest);
+        if (sysStream.getAudioTracks().length) {
+          var sysSrc = mixCtx.createMediaStreamSource(new MediaStream(sysStream.getAudioTracks()));
+          sysSrc.connect(dest); meterStart(mixCtx, sysSrc);      // 相手の声（Macから出る音）が本当に入っているかを、メーターで見せる
+        } else meterNone();
         stream = dest.stream;
       }
     } catch (e) {
@@ -325,6 +335,26 @@
   /* 呼び出し中の表示：発信してから相手が出るまで（ブラウザからは通話の状態が見えないので、秒数と次の操作を出しておく）。
      30秒で「出ないなら押す」を強調、60秒で音を鳴らして知らせる */
   var ringIv = null;
+  /* 🎧 相手の声のメーター：イヤホンのまま録るとき、Macから出る音（相手の声）が録音に入っているかを目で見せる */
+  var meterIv = null;
+  function meterStart(ctx, src){
+    var an = ctx.createAnalyser(); an.fftSize = 512; src.connect(an);
+    var buf = new Uint8Array(an.fftSize), heard = 0, t1 = Date.now(), m = $('#sysMeter'); m.style.display = 'block';
+    clearInterval(meterIv);
+    meterIv = setInterval(function(){
+      if (!listening) { clearInterval(meterIv); m.style.display = 'none'; return; }
+      an.getByteTimeDomainData(buf); var pk = 0; for (var i = 0; i < buf.length; i++) pk = Math.max(pk, Math.abs(buf[i] - 128));
+      if (pk > 6) heard = Date.now();
+      var n = Math.min(12, Math.round(pk / 6));
+      var silent = !heard && Date.now() - t1 > 25000;
+      m.innerHTML = '🎧 相手の声（Macの音）：<span style="color:' + (pk > 6 ? '#0E6E66' : '#999') + ';letter-spacing:-1px">' + '▮'.repeat(n) + '▯'.repeat(12 - n) + '</span>'
+        + (silent ? '<br><b style="color:#C62828">25秒たっても音が来ていません。呼び出し音も相手の声も録音に入っていない可能性があります。下の「⚠ 相手の声が入らないとき」を見てください。</b>' : '');
+    }, 200);
+  }
+  function meterNone(){
+    var m = $('#sysMeter'); m.style.display = 'block';
+    m.innerHTML = '<b style="color:#C62828">🎧 相手の声は録音に入っていません（画面共有で「システムの音声も共有」が選ばれていません）。</b>いったん通話を終えて、もう一度「発信して記録開始」→「画面全体」→「システムの音声も共有」にチェックしてください。';
+  }
   function ringStop(){ clearInterval(ringIv); ringIv = null; $('#ringBox').style.display = 'none'; }
   /* 何回目の電話か（業務ツールから step= で渡される）を名前の下に大きく出す */
   function stepShow(st){ var e = $('#step'); if (!e) return; e.style.display = st ? 'block' : 'none'; e.textContent = st || ''; }
