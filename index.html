@@ -50,6 +50,8 @@
   <div id="earNote" class="note" style="display:none;margin-top:4px">押すと「画面を共有」が出ます →「画面全体」を選び、<b>「システムの音声も共有」にチェック</b>して「共有」。画面の映像は使わず、音だけ録ります。通話のあと、このMacの中で文字起こしします（無料・外に送りません）。</div>
   <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:6px"><input type="checkbox" id="viaPhone" style="width:auto"> 📱 iPhoneで発信（Macを通さない・呼び出し音が鳴らない問題が起きない）</label>
   <div id="phoneNote" class="note" style="display:none;margin-top:4px">iPhoneで <b>unyounaokif21-bot.github.io/actr-pages/call/</b> を開いて「待ち受けを始める」を押しておくと、発信のたびにかける人のボタンが出ます。iPhoneはスピーカーにしてMacの近くに置いてください（Macのマイクで録音します）。</div>
+  <button id="testDial" type="button" style="background:#fff;color:#1565C0;border:2px solid #1565C0;font-size:14px;padding:9px">🧪 自分の携帯にテスト発信（090-5701-5693）</button>
+  <div id="testNote" class="note" style="display:none;margin-top:4px"></div>
   <button id="stop">■ 通話終了 → 保存して閉じる</button>
   <button id="noans">📵 出なかった（SMSを送る）</button>
   <div id="smsBox">
@@ -92,6 +94,30 @@
   // 送り先は業務ツール（Google Apps Script の画面）だけに限る
   var okOrigin = (/^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(origin) || origin === "https://unyounaokif21-bot.github.io") ? origin : "";
   $('#who').textContent = (name || '（氏名なし）') + '　' + (tel || '（電話番号なし）');
+
+  /* 発信：「📱 iPhoneで発信」がオンならiPhoneの発信ページへ、オフならMacから（tel: → ショートカット ACTR_CALL で「通話」を押す） */
+  function dialTel(t, nm, say){
+    if (VIA_PHONE && !/iPhone|Android/.test(navigator.userAgent)) {
+      rpc('iPhone発信を頼む', [t, nm]).then(function(){ say('📱 iPhoneに「' + (nm || t) + 'にかける」ボタンを出しました。iPhoneで押してください'); })
+        .catch(function(e){ say('iPhoneに送れませんでした：' + e.message + '　iPhoneで番号を押してかけてください：' + t); });
+      return;
+    }
+    var a = document.createElement('a'); a.href = 'tel:' + t; document.body.appendChild(a); a.click(); a.remove();
+    if (!/iPhone|Android/.test(navigator.userAgent)) setTimeout(function(){
+      var b = document.createElement('a'); b.href = 'shortcuts://run-shortcut?name=ACTR_CALL'; document.body.appendChild(b); b.click(); b.remove();
+    }, 400);
+  }
+  /* 🧪 テスト発信：自分の携帯にかけて、電話の仕組みが動くか確かめる（録音・架電履歴には残さない） */
+  var MY_TEL = '09057015693';
+  function testDial(){
+    var n = $('#testNote'); n.style.display = '';
+    n.innerHTML = '🧪 テスト発信中（' + (VIA_PHONE ? 'iPhoneで発信' : 'Macから発信') + '）…<br>'
+      + '・携帯が鳴る → 電話の仕組みはOK。切ってください<br>'
+      + '・鳴らない／「発信中」のまま → Wi-Fi（公共Wi-Fiならテザリングに）か、音の出力（MacBook Airのスピーカーに）を確認';
+    dialTel(MY_TEL, 'テスト（自分の携帯）', function(t){ n.innerHTML = '🧪 ' + t; });
+  }
+  $('#testDial').onclick = testDial;
+  if (q.get('test') === '1') setTimeout(testDial, 300);
 
   function send(msg){
     if (okOrigin && window.opener && !window.opener.closed) { window.opener.postMessage(msg, okOrigin); return true; }
@@ -180,16 +206,7 @@
       if (!sysStream.getAudioTracks().length) $('#state').textContent = '⚠「システムの音声も共有」にチェックがありませんでした。相手の声は入りません（自分の声だけ録ります）。';
       loadAsr().catch(function(){});                 // 文字起こしの準備を先に始めておく
     }
-    if (tel && VIA_PHONE && !/iPhone|Android/.test(navigator.userAgent)) {   // iPhoneの発信ページに番号を渡す（Macの中継を使わない）
-      rpc('iPhone発信を頼む', [tel, name]).then(function(){ $('#state').textContent = '📱 iPhoneに「' + (name || tel) + 'さんにかける」ボタンを出しました。iPhoneで押してください（録音はもう始まっています）'; })
-        .catch(function(e){ $('#state').textContent = 'iPhoneに送れませんでした：' + e.message + '　iPhoneで番号を押してかけてください：' + tel; });
-    } else if (tel) {                            // 発信（MacではFaceTime → iPhone経由）
-      var a = document.createElement('a'); a.href = 'tel:' + tel; document.body.appendChild(a); a.click(); a.remove();
-      // 右上に出る「通話」の確認を、Macのショートカット「ACTR_CALL」で自動で押す（入っていなければ何も起きない）
-      if (!/iPhone|Android/.test(navigator.userAgent)) setTimeout(function(){
-        var b = document.createElement('a'); b.href = 'shortcuts://run-shortcut?name=ACTR_CALL'; document.body.appendChild(b); b.click(); b.remove();
-      }, 400);
-    }
+    if (tel) dialTel(tel, name, function(t){ $('#state').textContent = t; });
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true, channelCount: 1 } });
       micStream = stream;
