@@ -408,7 +408,7 @@
       cd.bd.innerHTML = '<details><summary>文面を見る・直す</summary><textarea></textarea></details><div class="note" style="margin-top:2px"></div>';
       if (r.dup) go.style.background = 'var(--muted)';
       var ta = cd.bd.querySelector('textarea');
-      ta.value = r.sms || 'ACT-Rの香川です！ご応募ありがとうございます。さっきお電話しました📞 5分で終わるので、この番号に折り返しもらうか「◯時ならOK」だけ返信ください🙏';
+      ta.value = r.sms || 'ACT-Rの香川です！ご応募ありがとうございます。さっきお電話しました📞 15〜20分ほどお話しできたら、ぴったりのお仕事をご案内できます！この番号に折り返しもらうか「◯時ならOK」だけ返信ください🙏';
       go.onclick = function(){
         var to = String(who.tel || '').replace(/[^0-9]/g, '');
         if (!to) { alert('電話番号がありません'); return; }
