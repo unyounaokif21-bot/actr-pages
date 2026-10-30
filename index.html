@@ -201,24 +201,26 @@
   var earShow = function(){ $('#earNote').style.display = $('#earMode').checked ? 'block' : 'none'; };
   $('#earMode').onchange = function(){ try { localStorage.setItem('earMode', this.checked ? '1' : ''); } catch(x) {} earShow(); };
   earShow();
-  function loadAsr(){
-    if (asrP) return asrP;
-    asrP = import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3').then(function(T){
-      var gpu = !!navigator.gpu;
-      return T.pipeline('automatic-speech-recognition', 'onnx-community/whisper-small', {
-        device: gpu ? 'webgpu' : 'wasm',
-        dtype: gpu ? { encoder_model: 'fp32', decoder_model_merged: 'q4' } : 'q8'
-      });
-    });
-    return asrP;
+  /* 文字起こしのAI（Whisper）は重いので、画面とは別の裏側（Worker）で、電話が終わってから動かす。発信のときは読み込まない */
+  var WK = null, wkId = 0, wkWait = {};
+  function asrWorker(){
+    if (WK) return WK;
+    var src = "import { pipeline } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3';\n"
+      + "var p = null; function get(){ if (p) return p; var gpu = !!navigator.gpu;\n"
+      + " p = pipeline('automatic-speech-recognition', 'onnx-community/whisper-small', { device: gpu ? 'webgpu' : 'wasm', dtype: gpu ? { encoder_model: 'fp32', decoder_model_merged: 'q4' } : 'q8' }); return p; }\n"
+      + "self.onmessage = async function(e){ try { var asr = await get(); var out = await asr(e.data.data, { language: 'japanese', task: 'transcribe', chunk_length_s: 30, stride_length_s: 5 });\n"
+      + " self.postMessage({ id: e.data.id, text: String((out && out.text) || '').trim() }); } catch (err) { self.postMessage({ id: e.data.id, err: String(err && err.message || err) }); } };";
+    WK = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })), { type: 'module' });
+    WK.onmessage = function(e){ var w = wkWait[e.data.id]; delete wkWait[e.data.id]; if (!w) return; if (e.data.err) w.ng(new Error(e.data.err)); else w.ok(e.data.text); };
+    WK.onerror = function(e){ Object.keys(wkWait).forEach(function(k){ wkWait[k].ng(new Error(e.message || '文字起こしを動かせませんでした')); delete wkWait[k]; }); WK = null; };
+    return WK;
   }
   async function whisperText(blob){
-    var asr = await loadAsr();
     var ac = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
     var buf = await ac.decodeAudioData(await blob.arrayBuffer());
-    var data = buf.getChannelData(0); try { ac.close(); } catch(x) {}
-    var out = await asr(data, { language: 'japanese', task: 'transcribe', chunk_length_s: 30, stride_length_s: 5 });
-    return String((out && out.text) || '').trim();
+    var data = buf.getChannelData(0).slice(); try { ac.close(); } catch(x) {}
+    var id = ++wkId;
+    return new Promise(function(ok, ng){ wkWait[id] = { ok: ok, ng: ng }; asrWorker().postMessage({ id: id, data: data }, [data.buffer]); });
   }
 
   var VIA_PHONE = false;   // ふだんはMacから発信（iPhoneの発信ページは、チェックを入れたときだけ）
@@ -234,7 +236,6 @@
         sysStream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'monitor' }, audio: { echoCancellation: false, noiseSuppression: false }, systemAudio: 'include', selfBrowserSurface: 'exclude', monitorTypeSurfaces: 'include', surfaceSwitching: 'exclude' });
       } catch (e) { $('#state').textContent = '画面の共有がキャンセルされました。もう一度押すか、「イヤホンのまま録る」を外してください。'; return; }
       if (!sysStream.getAudioTracks().length) $('#state').textContent = '⚠「システムの音声も共有」にチェックがありませんでした。相手の声は入りません（自分の声だけ録ります）。';
-      loadAsr().catch(function(){});                 // 文字起こしの準備を先に始めておく
     }
     if (tel) dialTel(tel, name, function(t){ $('#state').textContent = t; });
     try {
@@ -308,7 +309,7 @@
       $('#state').textContent = '通話を保存しています。業務ツールは先に次の人へ進めてOKです（この人の分は下で続けて記録します）。';
       var cd = card(who);
       var tr = trLive;
-      if (useEar) {                                     // 相手の声も入った録音を、このMacの中で文字起こし
+      if (useEar && secs >= 45) {                       // 相手の声も入った録音を、このMacの中で文字起こし（45秒未満の短い電話はしない）
         cd.st('文字起こししています…（このウィンドウは閉じないでください）');
         try { var wt = await whisperText(blob); if (wt.length > 10) tr = wt; } catch (e) { cd.st('文字起こしに失敗しました（' + e.message + '）。聞き取れた分だけ送ります。'); }
       }
@@ -356,6 +357,12 @@
   function meterNone(){
     var m = $('#sysMeter'); m.style.display = 'block';
     m.innerHTML = '<b style="color:#C62828">🎧 相手の声は録音に入っていません（画面共有で「システムの音声も共有」が選ばれていません）。</b>いったん通話を終えて、もう一度「発信して記録開始」→「画面全体」→「システムの音声も共有」にチェックしてください。';
+  }
+  /* SMSを送ったら、業務ツールに戻らずに、そのままセットの2回目をかけられるようにする */
+  function againShow(who){
+    if (who.tel !== tel) return;                        // もう次の人に進んでいたら出さない
+    $('#state').innerHTML = '<button id="again" type="button" style="background:#C62828;color:#fff;font-size:17px">📞 もう一回かける（セットの2回目）</button>';
+    $('#again').onclick = function(){ stepShow('📞 いま：セットの2回目（SMSのあと・出なくてもSMSは送りません）'); $('#state').textContent = ''; $('#start').click(); };
   }
   /* 🔎 通話の途中で：業務ツールに「ここまでを要約して案件を確認」を頼む（電話はつないだまま） */
   $('#aiJobs').onclick = function(){
@@ -417,7 +424,7 @@
         sent[to] = Date.now(); try { localStorage.setItem('smsSent', JSON.stringify(sent)); } catch(x) {}
         openExt('shortcuts://run-shortcut?name=' + encodeURIComponent('ACTR_SMS') + '&input=text&text=' + encodeURIComponent(JSON.stringify({ to: to, body: ta.value })));
         this.disabled = true; this.textContent = '✅ 送りました';
-        cd.st('✅ SMSを送りました'); cd.bd.querySelector('.note').innerHTML = '送れていなければ → <a href="sms:' + to + '&body=' + encodeURIComponent(ta.value) + '">メッセージで開いて手で送る</a>';
+        againShow(who); cd.st('✅ SMSを送りました'); cd.bd.querySelector('.note').innerHTML = '送れていなければ → <a href="sms:' + to + '&body=' + encodeURIComponent(ta.value) + '">メッセージで開いて手で送る</a>';
         cd.done();
       };
     };
@@ -435,13 +442,13 @@
     foldOld(); stepShow(q2.get('step'));
     $('#stop').disabled = false; $('#stop').textContent = '■ 電話を切ったら押す（録音を保存して閉じる）';
     $('#start').style.display = 'block';
-    if (q2.get('auto') === '1') setTimeout(function(){ $('#start').click(); }, 300);
+    if (q2.get('auto') === '1') setTimeout(function(){ $('#start').click(); }, 100);
   });
   window.addEventListener('beforeunload', function(e){ if (listening && Date.now() > EXT_UNTIL) { e.preventDefault(); e.returnValue = ''; } });
   // 業務ツールの「優先順に電話」から開いたときは、そのまま発信・録音を始める（ブラウザに止められたらボタンを押す）
   if (q.get('auto') === '1') {
     $('#state').textContent = '発信と録音を始めています…（始まらないときは上のボタンを押してください）';
-    setTimeout(function(){ if ($('#start').style.display !== 'none') $('#start').click(); }, 500);
+    setTimeout(function(){ if ($('#start').style.display !== 'none') $('#start').click(); }, 100);
   }
 })();
 </script>
