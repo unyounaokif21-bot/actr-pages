@@ -65,7 +65,7 @@
   <button id="testDial" type="button" style="margin-top:8px;background:#fff;color:#1565C0;border:2px solid #1565C0;font-size:14px;padding:9px">🧪 自分の携帯にテスト発信（090-5701-5693）</button>
   </details>
   <div id="testNote" class="note" style="display:none;margin-top:4px"></div>
-  <button id="stop">■ 通話終了 → 保存して閉じる</button>
+  <button id="stop">■ 電話を切ったら押す（録音を保存して閉じる）</button>
   <button id="noans">📵 出なかった（1回目ならSMS／SMSのあとの2回目なら記録だけ）</button>
   <div id="smsBox">
     <div style="font-weight:800;margin-bottom:4px" id="smsHead">SMSの文面</div>
@@ -77,10 +77,12 @@
     <b>📞 呼び出し中… <span id="ringSec">0</span>秒</b>
     <div style="font-size:13px;margin-top:4px" id="ringMsg">相手が出たら、このまま話してください（録音は始まっています）。<br>このページからは「相手が出たか」は見えません。<b>出ないときは下の「出なかった」</b>を押してください。</div>
     <button id="ringNo" style="background:#E8A33D;color:#fff">📵 出なかった → 不在で記録・SMS</button>
-    <button id="ringYes" style="background:var(--teal);color:#fff">✅ つながった（この表示を消す）</button>
+    <button id="ringYes" style="background:var(--teal);color:#fff">✅ 相手が出た（このまま録音を続ける）</button>
   </div>
   <div id="rec"><i></i><span id="clock">00:00</span> 録音・聞き取り中</div>
   <div id="sysMeter" style="display:none;margin-top:6px;font-size:13px;font-weight:700"></div>
+  <button id="aiJobs" type="button" style="display:none;margin-top:8px;background:#B26A00;color:#fff;font-size:14px;padding:10px">🔎 ここまでを要約して案件を確認（業務ツールに出ます）</button>
+  <div id="aiJobsNote" class="note" style="display:none;margin-top:4px"></div>
   <div id="pendHead">✉ SMSがまだの人</div>
   <div id="pend"></div>
   <div id="state">ボタンを押すと、iPhone経由で発信して、録音と聞き取りが同時に始まります。</div>
@@ -166,8 +168,8 @@
   function foldOld(){ document.querySelectorAll('#pend .pc details').forEach(function(d){ d.open = false; }); }
   function pendCount(){ var n = document.querySelectorAll('#pend .pc').length; $('#pendHead').style.display = n ? 'block' : 'none'; $('#pendHead').textContent = '✉ SMSがまだの人（' + n + '人）'; }
   function resetMain(){
-    $('#rec').style.display = 'none'; $('#stop').style.display = 'none'; $('#noans').style.display = 'none';
-    $('#stop').disabled = false; $('#stop').textContent = '■ 通話終了 → 保存して閉じる';
+    $('#rec').style.display = 'none'; $('#stop').style.display = 'none'; $('#noans').style.display = 'none'; $('#aiJobs').style.display = 'none'; $('#aiJobsNote').style.display = 'none';
+    $('#stop').disabled = false; $('#stop').textContent = '■ 電話を切ったら押す（録音を保存して閉じる）';
     $('#start').style.display = 'block'; $('#live').textContent = ''; $('#clock').textContent = '00:00';
   }
 
@@ -265,7 +267,7 @@
       if (s >= nextCheck && !longOpen) askLong(s);
       $('#clock').textContent = ('0' + Math.floor(s / 60)).slice(-2) + ':' + ('0' + (s % 60)).slice(-2);
     }, 1000);
-    $('#start').style.display = 'none'; $('#stop').style.display = 'block'; $('#noans').style.display = 'block'; $('#rec').style.display = 'flex';
+    $('#start').style.display = 'none'; $('#stop').style.display = 'block'; $('#noans').style.display = 'block'; $('#rec').style.display = 'flex'; $('#aiJobs').style.display = 'block';
     $('#state').textContent = (VIA_PHONE && tel ? '📱 iPhoneの発信ページのボタンを押してかけてください。' : '') + '録音・聞き取り中です。聞き取った内容は、業務ツールの入力欄に自動で入ります。';
     send({ type: 'started' });
     ringStart();
@@ -355,6 +357,12 @@
     var m = $('#sysMeter'); m.style.display = 'block';
     m.innerHTML = '<b style="color:#C62828">🎧 相手の声は録音に入っていません（画面共有で「システムの音声も共有」が選ばれていません）。</b>いったん通話を終えて、もう一度「発信して記録開始」→「画面全体」→「システムの音声も共有」にチェックしてください。';
   }
+  /* 🔎 通話の途中で：業務ツールに「ここまでを要約して案件を確認」を頼む（電話はつないだまま） */
+  $('#aiJobs').onclick = function(){
+    var n = $('#aiJobsNote'); n.style.display = 'block';
+    if (send({ type: 'aiJobs', tel: tel })) { n.textContent = '業務ツールで要約して、案件を探しています（30秒ほど）。業務ツールの画面を見てください。'; }
+    else n.innerHTML = '<b style="color:#C62828">業務ツールの画面が見つかりません。</b>業務ツールの「🔎 ここまでを要約して案件を確認」を押してください。';
+  };
   function ringStop(){ clearInterval(ringIv); ringIv = null; $('#ringBox').style.display = 'none'; }
   /* 何回目の電話か（業務ツールから step= で渡される）を名前の下に大きく出す */
   function stepShow(st){ var e = $('#step'); if (!e) return; e.style.display = st ? 'block' : 'none'; e.textContent = st || ''; }
@@ -425,7 +433,7 @@
     $('#who').innerHTML = esc(name || '（氏名なし）') + '<small>' + esc(tel ? tel.replace(/^(\d{3})(\d{4})(\d+)$/, '$1-$2-$3') : '電話番号なし') + '</small>';
     full = ''; chunks = []; $('#live').textContent = ''; $('#after').innerHTML = '';   // 前の人のカード（SMS・記録中）は残すが、1行にたたむ
     foldOld(); stepShow(q2.get('step'));
-    $('#stop').disabled = false; $('#stop').textContent = '■ 通話終了 → 保存して閉じる';
+    $('#stop').disabled = false; $('#stop').textContent = '■ 電話を切ったら押す（録音を保存して閉じる）';
     $('#start').style.display = 'block';
     if (q2.get('auto') === '1') setTimeout(function(){ $('#start').click(); }, 300);
   });
