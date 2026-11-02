@@ -40,17 +40,16 @@
     window.google = { script: { run: run(null, null), host: { close: function(){}, setHeight: function(){} } } };
   }
   // 画面のHTMLと同時に「電話の順番」も取りに行く（画面が出たらすぐ1人目を入れるため）
-  try { window.__QP = fetch(u, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ rpc: '架電キュー', args: [[]] }) }).then(function(r){ return r.json(); }); window.__QP.catch(function(){}); } catch (e) {}
+  function startQP(){ try { window.__QP = fetch(u, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ rpc: '架電キュー', args: [[]] }) }).then(function(r){ return r.json(); }); window.__QP.catch(function(){}); } catch (e) {} }
   function render(html){
     var head = '<link rel="icon" type="image/png" sizes="32x32" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-32.png"><link rel="icon" type="image/png" sizes="512x512" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-512.png"><link rel="apple-touch-icon" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-180.png"><title>業務ツール</title><script>(' + shim.toString() + ')(' + JSON.stringify(u) + ');<\/script>';
-    document.open(); document.write(html.replace(/<head>/i, '<head>' + head)); document.close();
+    document.open(); startQP(); document.write(html.replace(/<head>/i, '<head>' + head)); document.close();   // document.open は通信を止めるので、通信はこのあとで始める
   }
   // 画面のHTMLはこの端末に保存しておいて、すぐ出す。裏で最新を取りに行き、新しくなっていたら保存して、更新の案内を出す
   var saved = '', shown = false;
   try { if (!qs.get('k')) saved = localStorage.getItem('toolHtml') || ''; } catch (e) {}
   // ページを読んでいる途中に書き込むと「読み込んでいます」が残るので、読み終わってから出す
-  if (/<html/i.test(saved)) { shown = true; setTimeout(function(){ render(saved); }, 0); }
-  fetch(u + '?' + qs.toString()).then(function(r){ return r.text(); }).then(function(html){
+  function latest(){ fetch(u + '?' + qs.toString()).then(function(r){ return r.text(); }).then(function(html){
     if (!/<html/i.test(html)) throw new Error('画面を取得できませんでした');
     if (!qs.get('k') && html !== saved) { try { localStorage.setItem('toolHtml', html); } catch (e) {} }
     if (!shown) { render(html); return; }
@@ -59,7 +58,9 @@
       b.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:9999;padding:8px 12px;font-weight:800;background:#0E6E66;color:#fff;border:0;border-radius:6px';
       b.onclick = function(){ location.reload(); }; document.body.appendChild(b);
     }
-  }).catch(function(e){ if (!shown) msg.innerHTML = '読み込めませんでした（' + String(e && e.message || e) + '）。<br><a href="' + u + '">こちらから開く</a>'; });
+  }).catch(function(e){ if (!shown) msg.innerHTML = '読み込めませんでした（' + String(e && e.message || e) + '）。<br><a href="' + u + '">こちらから開く</a>'; }); }
+  if (/<html/i.test(saved)) { shown = true; setTimeout(function(){ render(saved); latest(); }, 0); }
+  else latest();
 })();
 </script>
 </body>
