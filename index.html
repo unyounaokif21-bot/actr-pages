@@ -239,7 +239,7 @@
     }
     PREP = null; var pt = tel;                          // 不在のときのSMSを、発信と同時に用意しておく（押したらすぐ送るため）
     if (tel) rpc('不在の準備', [tel, name]).then(function(r){ if (r && r.ok && pt === tel) { r.tel = pt; PREP = r; } }).catch(function(){});
-    if (tel) dialTel(tel, name, function(t){ $('#state').textContent = t; });
+    if (tel) { rpc('発信した', [tel, name]).catch(function(){}); dialTel(tel, name, function(t){ $('#state').textContent = t; }); }
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true, channelCount: 1 } });
       micStream = stream;
