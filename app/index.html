@@ -48,7 +48,8 @@
   // 画面のHTMLはこの端末に保存しておいて、すぐ出す。裏で最新を取りに行き、新しくなっていたら保存して、更新の案内を出す
   var saved = '', shown = false;
   try { if (!qs.get('k')) saved = localStorage.getItem('toolHtml') || ''; } catch (e) {}
-  if (/<html/i.test(saved)) { shown = true; render(saved); }
+  // ページを読んでいる途中に書き込むと「読み込んでいます」が残るので、読み終わってから出す
+  if (/<html/i.test(saved)) { shown = true; setTimeout(function(){ render(saved); }, 0); }
   fetch(u + '?' + qs.toString()).then(function(r){ return r.text(); }).then(function(html){
     if (!/<html/i.test(html)) throw new Error('画面を取得できませんでした');
     if (!qs.get('k') && html !== saved) { try { localStorage.setItem('toolHtml', html); } catch (e) {} }
