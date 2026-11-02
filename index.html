@@ -66,7 +66,7 @@
   </details>
   <div id="testNote" class="note" style="display:none;margin-top:4px"></div>
   <button id="stop">■ 電話を切ったら押す（録音を保存して閉じる）</button>
-  <button id="noans">📵 出なかった（1回目ならSMS／SMSのあとの2回目なら記録だけ）</button>
+  <button id="noans">📵 出なかった → すぐSMS（SMSのあとの2回目なら記録だけ）</button>
   <div id="smsBox">
     <div style="font-weight:800;margin-bottom:4px" id="smsHead">SMSの文面</div>
     <textarea id="smsText"></textarea>
@@ -76,7 +76,7 @@
   <div id="ringBox">
     <b>📞 呼び出し中… <span id="ringSec">0</span>秒</b>
     <div style="font-size:13px;margin-top:4px" id="ringMsg">相手が出たら、このまま話してください（録音は始まっています）。<br>このページからは「相手が出たか」は見えません。<b>出ないときは下の「出なかった」</b>を押してください。</div>
-    <button id="ringNo" style="background:#E8A33D;color:#fff">📵 出なかった → 不在で記録・SMS</button>
+    <button id="ringNo" style="background:#E8A33D;color:#fff">📵 出なかった → すぐSMS（記録は自動）</button>
     <button id="ringYes" style="background:var(--teal);color:#fff">✅ 相手が出た（このまま録音を続ける）</button>
   </div>
   <div id="rec"><i></i><span id="clock">00:00</span> 録音・聞き取り中</div>
@@ -237,6 +237,8 @@
       } catch (e) { $('#state').textContent = '画面の共有がキャンセルされました。もう一度押すか、「イヤホンのまま録る」を外してください。'; return; }
       if (!sysStream.getAudioTracks().length) $('#state').textContent = '⚠「システムの音声も共有」にチェックがありませんでした。相手の声は入りません（自分の声だけ録ります）。';
     }
+    PREP = null; var pt = tel;                          // 不在のときのSMSを、発信と同時に用意しておく（押したらすぐ送るため）
+    if (tel) rpc('不在の準備', [tel, name]).then(function(r){ if (r && r.ok && pt === tel) { r.tel = pt; PREP = r; } }).catch(function(){});
     if (tel) dialTel(tel, name, function(t){ $('#state').textContent = t; });
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true, channelCount: 1 } });
@@ -359,10 +361,11 @@
     m.innerHTML = '<b style="color:#C62828">🎧 相手の声は録音に入っていません（画面共有で「システムの音声も共有」が選ばれていません）。</b>いったん通話を終えて、もう一度「発信して記録開始」→「画面全体」→「システムの音声も共有」にチェックしてください。';
   }
   /* SMSを送ったら、業務ツールに戻らずに、そのままセットの2回目をかけられるようにする */
+  var PREP = null, SECOND = '';
   function againShow(who){
     if (who.tel !== tel) return;                        // もう次の人に進んでいたら出さない
     $('#state').innerHTML = '<button id="again" type="button" style="background:#C62828;color:#fff;font-size:17px">📞 もう一回かける（セットの2回目）</button>';
-    $('#again').onclick = function(){ stepShow('📞 いま：セットの2回目（SMSのあと・出なくてもSMSは送りません）'); $('#state').textContent = ''; $('#start').click(); };
+    $('#again').onclick = function(){ SECOND = who.tel; stepShow('📞 いま：セットの2回目（SMSのあと・出なくてもSMSは送りません）'); $('#state').textContent = ''; $('#start').click(); };
   }
   /* 🔎 通話の途中で：業務ツールに「ここまでを要約して案件を確認」を頼む（電話はつないだまま） */
   $('#aiJobs').onclick = function(){
@@ -398,6 +401,20 @@
     try { if (media && media.state !== 'inactive') { media.onstop = null; media.stop(); } } catch(x) {}
     try { stream && stream.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {}
     resetMain();
+    var prep = PREP && PREP.tel === who.tel ? PREP : null, again = SECOND === who.tel; PREP = null; SECOND = '';
+    var to0 = String(who.tel || '').replace(/[^0-9]/g, ''), sent0 = {}; try { sent0 = JSON.parse(localStorage.getItem('smsSent') || '{}'); } catch(x) {}
+    if (prep && prep.sms && !again && !(sent0[to0] && Date.now() - sent0[to0] < 30 * 60000)) {   // SMSを先に送って、すぐ2回目をかけられるようにする。不在の記録は裏で進める
+      sent0[to0] = Date.now(); try { localStorage.setItem('smsSent', JSON.stringify(sent0)); } catch(x) {}
+      openExt('shortcuts://run-shortcut?name=' + encodeURIComponent('ACTR_SMS') + '&input=text&text=' + encodeURIComponent(JSON.stringify({ to: to0, body: prep.sms })));
+      var cf = card(who); cf.st('✅ SMSを送りました（不在を記録中）');
+      cf.bd.innerHTML = '<div class="note">送れていなければ → <a href="sms:' + to0 + '&body=' + encodeURIComponent(prep.sms) + '">メッセージで開いて手で送る</a></div>';
+      againShow(who);
+      rpc('架電不在', [who.tel, who.name]).then(function(r){
+        cf.st('✅ SMS送信・不在の記録まで完了'); cf.done();
+        send({ type: 'noanswer', recorded: true, tel: who.tel, name: who.name, n: r && r.n || 1, second: false, msg: r && r.msg || '' });
+      }).catch(function(e){ cf.st('⚠ SMSは送りました。不在の記録ができませんでした：' + e.message); });
+      return;
+    }
     $('#state').textContent = '不在を記録しています…';
     var cd = card(who);
     cd.st('📵 不在として記録しています…');
