@@ -76,6 +76,10 @@
   <div id="ringBox">
     <b>📞 呼び出し中… <span id="ringSec">0</span>秒</b>
     <div style="font-size:13px;margin-top:4px" id="ringMsg">相手が出たら、このまま話してください（録音は始まっています）。<br>このページからは「相手が出たか」は見えません。<b>出ないときは下の「出なかった」</b>を押してください。</div>
+    <details id="vmBox" style="margin-top:6px;font-size:13px"><summary style="cursor:pointer;font-weight:700">📼 留守電になったら（読むだけ）</summary>
+      <div id="vmText" style="margin-top:4px;padding:6px 8px;background:#F3F8FF;border-left:4px solid #1565C0;line-height:1.6"></div>
+      <label style="display:block;margin-top:4px"><input type="checkbox" id="vmLeft"> 留守電に残した（記録に残します）</label>
+    </details>
     <button id="ringNo" style="background:#E8A33D;color:#fff">📵 出なかった → すぐSMS（記録は自動）</button>
     <button id="ringYes" style="background:var(--teal);color:#fff">✅ 相手が出た（このまま録音を続ける）</button>
   </div>
@@ -379,6 +383,12 @@
   function ringStart(){
     ringStop();
     var t1 = Date.now(); $('#ringSec').textContent = '0'; $('#ringBox').style.display = 'block'; $('#noans').style.display = 'none';
+    var nm = String(name || '').split(/[\s　]/)[0], again = SECOND === tel;   // 留守電のトーク：名乗り → 用件 → SMSを送ること → 折り返しのお願い（30秒以内）
+    $('#vmLeft').checked = false; $('#vmBox').open = false;
+    $('#vmText').textContent = 'お世話になっております。株式会社アクタルの香川と申します。' + (nm ? nm + '様のお電話でよろしかったでしょうか。' : '')
+      + (again ? '先ほどもお電話いたしました、' : '') + 'ご応募いただいたお仕事の件でご連絡いたしました。'
+      + 'このあとショートメッセージもお送りしますので、ご都合のよいお時間をご返信いただくか、この番号に折り返しいただけますと幸いです。'
+      + 'それでは失礼いたします。';
     $('#ringMsg').innerHTML = '相手が出たら、このまま話してください（録音は始まっています）。<br>このページからは「相手が出たか」は見えません。<b>出ないときは下の「出なかった」</b>を押してください。';
     ringIv = setInterval(function(){
       var s = Math.floor((Date.now() - t1) / 1000); $('#ringSec').textContent = s;
@@ -402,6 +412,7 @@
     try { stream && stream.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {}
     resetMain();
     var prep = PREP && PREP.tel === who.tel ? PREP : null, again = SECOND === who.tel; PREP = null; SECOND = '';
+    var vmNow = $('#vmLeft').checked;
     var to0 = String(who.tel || '').replace(/[^0-9]/g, ''), sent0 = {}; try { sent0 = JSON.parse(localStorage.getItem('smsSent') || '{}'); } catch(x) {}
     if (prep && prep.sms && !again && !(sent0[to0] && Date.now() - sent0[to0] < 30 * 60000)) {   // SMSを先に送って、すぐ2回目をかけられるようにする。不在の記録は裏で進める
       sent0[to0] = Date.now(); try { localStorage.setItem('smsSent', JSON.stringify(sent0)); } catch(x) {}
@@ -409,7 +420,7 @@
       var cf = card(who); cf.st('✅ SMSを送りました（不在を記録中）');
       cf.bd.innerHTML = '<div class="note">送れていなければ → <a href="sms:' + to0 + '&body=' + encodeURIComponent(prep.sms) + '">メッセージで開いて手で送る</a></div>';
       againShow(who);
-      rpc('架電不在', [who.tel, who.name]).then(function(r){
+      rpc('架電不在', [who.tel, who.name, vmNow]).then(function(r){
         cf.st('✅ SMS送信・不在の記録まで完了'); cf.done();
         send({ type: 'noanswer', recorded: true, tel: who.tel, name: who.name, n: r && r.n || 1, second: false, msg: r && r.msg || '' });
       }).catch(function(e){ cf.st('⚠ SMSは送りました。不在の記録ができませんでした：' + e.message); });
@@ -445,7 +456,7 @@
         cd.done();
       };
     };
-    rpc('架電不在', [who.tel, who.name]).then(function(r){
+    rpc('架電不在', [who.tel, who.name, vmNow]).then(function(r){
       show(r);
       send({ type: 'noanswer', recorded: true, tel: who.tel, name: who.name, n: r && r.n || 1, second: !!(r && r.second), msg: r && r.msg || '' });
     }).catch(function(e){ show({}, e.message); });
