@@ -57,7 +57,7 @@
     if (html !== saved) {
       var b = document.createElement('button'); b.textContent = '🔄 新しい版があります（押して更新）';
       b.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:9999;padding:8px 12px;font-weight:800;background:#0E6E66;color:#fff;border:0;border-radius:6px';
-      b.onclick = function(){ location.reload(); }; document.body.appendChild(b);
+      b.onclick = function(){ try { window.saveNow && window.saveNow(); window.cloudSave && window.cloudSave('自動'); } catch (e) {} b.textContent = '保存して更新しています…'; setTimeout(function(){ location.reload(); }, 1200); }; document.body.appendChild(b);   // 入力中の内容を保存してから読み直す
     }
   }).catch(function(e){ if (!shown) msg.innerHTML = '読み込めませんでした（' + String(e && e.message || e) + '）。<br><a href="' + u + '">こちらから開く</a>'; }); }
   if (/<html/i.test(saved)) { shown = true; setTimeout(function(){ render(saved); latest(); }, 0); }
