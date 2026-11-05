@@ -440,7 +440,7 @@
       if (!err && !r.dup) $('#state').innerHTML = '<b style="color:#B26A00">📵 ' + esc(who.name || '') + 'さん：SMSを送ったら、すぐもう一回かけてください（セットの2回目）</b>';
       var go = document.createElement('button'); go.className = 'go'; go.textContent = r.dup ? '✉ 送っていなければ送る' : '✉ SMSを送る';
       cd.el.querySelector('.hd').appendChild(go);
-      cd.bd.innerHTML = '<details><summary>文面を見る・直す</summary><textarea></textarea></details><div class="note" style="margin-top:2px"></div>';
+      cd.bd.innerHTML = '<div style="font-size:12px;color:#5C6C78;margin-bottom:2px">送る文面（直してOK）</div><textarea style="width:100%;min-height:110px"></textarea><div class="note" style="margin-top:2px"></div>';   // 11/5 社長指示：文面は押さなくても最初から出す
       if (r.dup) go.style.background = 'var(--muted)';
       var ta = cd.bd.querySelector('textarea');
       ta.value = r.sms || 'ACT-Rの香川です！ご応募ありがとうございます。さっきお電話しました📞 15〜20分ほどお話しできたら、ぴったりのお仕事をご案内できます！この番号に折り返しもらうか「◯時ならOK」だけ返信ください🙏';
