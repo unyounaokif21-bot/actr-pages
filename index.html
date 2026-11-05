@@ -67,6 +67,7 @@
   <div id="testNote" class="note" style="display:none;margin-top:4px"></div>
   <button id="stop">■ 電話を切ったら押す（録音を保存して閉じる）</button>
   <button id="noans">📵 出なかった → すぐSMS（SMSのあとの2回目なら記録だけ）</button>
+  <button id="no2" style="background:#B26A00;color:#fff">📵 2回目も出なかった → 記録して次の人へ</button>
   <div id="smsBox">
     <div style="font-weight:800;margin-bottom:4px" id="smsHead">SMSの文面</div>
     <textarea id="smsText"></textarea>
@@ -81,6 +82,7 @@
       <label style="display:block;margin-top:4px"><input type="checkbox" id="vmLeft"> 留守電に残した（記録に残します）</label>
     </details>
     <button id="ringNo" style="background:#E8A33D;color:#fff">📵 出なかった → すぐSMS（記録は自動）</button>
+    <button id="ringNo2" style="background:#B26A00;color:#fff;margin-top:6px">📵 2回目も出なかった → 記録して次の人へ</button>
     <button id="ringYes" style="background:var(--teal);color:#fff">✅ 相手が出た（このまま録音を続ける）</button>
   </div>
   <div id="rec"><i></i><span id="clock">00:00</span> 録音・聞き取り中</div>
@@ -398,6 +400,22 @@
     }, 1000);
   }
   $('#ringNo').onclick = function(){ ringStop(); $('#noans').click(); };
+  /* 11/5 社長指示：SMSのあとの2回目も出なかった。録音は捨てて、2回目の記録は裏で。業務ツールはすぐ次の人へ */
+  $('#no2').onclick = function(){
+    ringStop();
+    var who = { tel: tel, name: name };
+    listening = false;
+    try { rec && rec.stop(); } catch(x) {}
+    clearInterval(iv);
+    try { if (media && media.state !== 'inactive') { media.onstop = null; media.stop(); } } catch(x) {}
+    try { stream && stream.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {}
+    resetMain(); PREP = null; SECOND = '';
+    var cd = card(who); cd.st('📵 2回目も不在として記録しています…');
+    send({ type: 'second_done', tel: who.tel, name: who.name });
+    rpc('二回目終わり', [who.tel, who.name]).then(function(r){ cd.st('✅ 2回目も不在で記録しました（今日' + (r && r.set || 1) + 'セット目おわり）'); cd.done(); })
+      .catch(function(e){ cd.st('⚠ 記録できませんでした：' + e.message); });
+  };
+  $('#ringNo2').onclick = function(){ $('#no2').click(); };
   $('#ringYes').onclick = function(){ ringStop(); if (listening) $('#noans').style.display = 'block'; };
 
   /* 出なかったとき：録音を捨てて、この人の電話番号で直接「不在」を記録 → SMSの文面を、この人のカードに出す。
