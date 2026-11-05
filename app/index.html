@@ -55,8 +55,9 @@
     if (!qs.get('k') && html !== saved) { try { localStorage.setItem('toolHtml', html); } catch (e) {} }
     if (!shown) { render(html); return; }
     if (html !== saved) {
-      var b = document.createElement('button'); b.textContent = '🔄 新しい版があります（押して更新）';
-      b.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:9999;padding:8px 12px;font-weight:800;background:#0E6E66;color:#fff;border:0;border-radius:6px';
+      // 11/5：小さくて気づけなかったので、画面の一番上に大きく出す（押すと入力を保存して、同じ人の画面のまま新しい版に切り替わる）
+      var b = document.createElement('button'); b.textContent = '🔄 業務ツールの新しい版があります。ここを押すと、入力を保存して切り替わります（同じ人のままです）';
+      b.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99999;padding:14px 12px;font-size:16px;font-weight:900;background:#C62828;color:#fff;border:0;box-shadow:0 3px 12px rgba(0,0,0,.3)';
       b.onclick = function(){ try { window.saveNow && window.saveNow(); window.cloudSave && window.cloudSave('自動'); } catch (e) {} b.textContent = '保存して更新しています…'; setTimeout(function(){ location.reload(); }, 1200); }; document.body.appendChild(b);   // 入力中の内容を保存してから読み直す
     }
   }).catch(function(e){ if (!shown) msg.innerHTML = '読み込めませんでした（' + String(e && e.message || e) + '）。<br><a href="' + u + '">こちらから開く</a>'; }); }
