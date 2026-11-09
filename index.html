@@ -325,7 +325,7 @@
         r.ondataavailable = function(e){ if (e.data && e.data.size) parts.push(e.data); };
         r.onstop = function(){
           sp.recs = sp.recs.filter(function(x){ return x !== r; });
-          var loud = peak > 0.02; if (sp.on) seg();
+          var loud = peak > (who === 'me' ? 0.08 : 0.02); if (sp.on) seg();   // 11/9 社長指示：自分のマイクは近くの大きな声だけ（隣の人の声を拾わない）
           if (!loud || !parts.length) return;                // 無音の区切りは送らない
           var blob = new Blob(parts, { type: r.mimeType || type || 'audio/webm' });
           sp.queue = sp.queue.then(function(){
@@ -349,12 +349,18 @@
       try { sp.ctx.close(); } catch(x) {}
       var gram = function(t){ var g = {}; t = t.replace(/[\s、。！？!?「」]/g, ''); for (var i = 0; i < t.length - 1; i++) g[t.substr(i, 2)] = 1; return g; };
       var sim = function(a, b){ var A = gram(a), B = gram(b), n = 0, m = 0; Object.keys(A).forEach(function(k){ m++; if (B[k]) n++; }); return m ? n / m : 0; };
+      // 11/9 社長指示：つながる前（呼び出し中）の話は入れない。相手が最初に話した時刻から始める（自動の案内・留守電の案内は相手の声として数えない）
+      var ann = /お出になりません|留守番電話|電波の届かない|電源が入っていない|おかけになった電話|発信音のあと|お呼びしましたが|ただいま電話に出ることができません/;
+      var firstThem = sp.out.filter(function(x){ return x.who === 'them' && !ann.test(x.text); }).sort(function(a, b){ return a.t - b.t; })[0];
+      if (!firstThem) return '';                             // 相手が一度も話していない（つながっていない）→ 文字起こしなし（隣の話を要約しない）
+      sp.out = sp.out.filter(function(x){ return x.t >= firstThem.t - 3 && !(x.who === 'them' && ann.test(x.text)); });
       var them = sp.out.filter(function(x){ return x.who === 'them'; });
       var lines = sp.out.filter(function(x){                 // 相手の声がマイクにも入った（スピーカーの日）分は、相手側だけ残す
         return x.who === 'them' || !them.some(function(y){ return Math.abs(y.t - x.t) < 8 && sim(x.text, y.text) > 0.6; });
       }).sort(function(a, b){ return a.t - b.t; });
       var out = [], last = null;
-      lines.forEach(function(x){ var lb = x.who === 'me' ? '香川' : '相手'; if (last && last.lb === lb && x.t - last.t < 6) { last.text += x.text; last.t = x.t; } else { last = { lb: lb, t: x.t, text: x.text }; out.push(last); } });
+      var themName = (String(sp.name || '').split(/[\s　]/)[0] || '相手') + (sp.name ? 'さん' : '');
+      lines.forEach(function(x){ var lb = x.who === 'me' ? '香川' : themName; if (last && last.lb === lb && x.t - last.t < 6) { last.text += x.text; last.t = x.t; } else { last = { lb: lb, t: x.t, text: x.text }; out.push(last); } });
       return out.map(function(x){ return x.lb + '：' + x.text; }).join('\n') + (sp.fails ? '\n（' + sp.fails + 'か所、文字起こしできなかった区切りがあります）' : '');
     });
   }
