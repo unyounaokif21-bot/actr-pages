@@ -179,7 +179,22 @@
   }
   /* 電話・ショートカットを開く。ページは離れないので、このあと3秒は「このサイトを離れますか？」を出さない */
   var EXT_UNTIL = 0;
-  function openExt(url){ EXT_UNTIL = Date.now() + 3000; var a = document.createElement('a'); a.href = url; document.body.appendChild(a); a.click(); a.remove(); }
+  // 11/9：Macの受付役（127.0.0.1:8711）があれば、発信・切る・SMSはそこに頼む（ボタンを押していなくてもChromeに止められない）。なければ今までどおりアプリを開く
+  var HELPER = false, HELPER_URL = 'http://127.0.0.1:8711';
+  function helperPing(){ return fetch(HELPER_URL + '/ping', { method: 'GET' }).then(function(r){ return r.json(); }).then(function(j){ HELPER = !!(j && j.ok); return HELPER; }).catch(function(){ HELPER = false; return false; }); }
+  helperPing(); setInterval(helperPing, 60000);
+  function helperCall(path, body){ return fetch(HELPER_URL + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }).then(function(r){ return r.json(); }); }
+  function openExt(url){
+    EXT_UNTIL = Date.now() + 3000;
+    if (HELPER) {
+      var m = String(url).match(/^actrcall:\/\/dial\/(\d+)/);
+      if (m) { helperCall('/dial', { tel: m[1] }).catch(function(){ HELPER = false; openExt(url); }); return; }
+      if (/^actrcall:\/\/hangup/.test(url)) { helperCall('/hangup').catch(function(){}); return; }
+      var sm = String(url).match(/^shortcuts:\/\/run-shortcut\?name=ACTR_SMS&input=text&text=(.*)$/);
+      if (sm) { try { var pl = JSON.parse(decodeURIComponent(sm[1])); helperCall('/sms', { to: pl.to, body: pl.body }).catch(function(){ HELPER = false; openExt(url); }); return; } catch(x) {} }
+    }
+    var a = document.createElement('a'); a.href = url; document.body.appendChild(a); a.click(); a.remove();
+  }
   function esc(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
   /* 新しい人に移ったら、前の人のカードは閉じて1行にする */
   function foldOld(){ document.querySelectorAll('#pend .pc details').forEach(function(d){ d.open = false; }); }
@@ -374,7 +389,7 @@
      → ③ 2回目も出なかった：記録して業務ツールは次の人へ → 前の人の登録内容を見せて、OK か 声で直す
      話せたときは緑の「話せた → 終わったら押す」で保存（いつもの流れ） */
   var ONE_AUTO2 = true;
-  function hangup(){ try { if (localStorage.getItem('AUTO_HANGUP') === '1') openExt('shortcuts://run-shortcut?name=' + encodeURIComponent('ACTR_HANGUP')); } catch(x) {} }
+  function hangup(){ openExt('actrcall://hangup'); }   // 11/9：ACTR通話.app で通話の「終了」を押せるようになったので、ボタンを押したら必ず切る
   function oneDraw(){
     var b = $('#one'), t = $('#oneTalk'), n = $('#oneNote'); if (!b) return;
     var inCall = $('#stop').style.display === 'block', second = SECOND === tel;
