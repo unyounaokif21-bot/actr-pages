@@ -132,7 +132,7 @@
   $('#who').innerHTML = esc(name || '（氏名なし）') + '<small>' + esc(tel ? tel.replace(/^(\d{3})(\d{4})(\d+)$/, '$1-$2-$3') : '電話番号なし') + '</small>';
   stepShow(q.get('step'));
 
-  /* 発信：「📱 iPhoneで発信」がオンならiPhoneの発信ページへ、オフならMacから（tel: → ショートカット ACTR_CALL で「通話」を押す） */
+  /* 発信：「📱 iPhoneで発信」がオンならiPhoneの発信ページへ、オフならMacから（tel: → アプリ ACTR通話 で通知の「通話」を押す） */
   function dialTel(t, nm, say){
     if (VIA_PHONE && !/iPhone|Android/.test(navigator.userAgent)) {
       rpc('iPhone発信を頼む', [t, nm]).then(function(){ say('📱 iPhoneに「' + (nm || t) + 'にかける」ボタンを出しました。iPhoneで押してください'); })
@@ -140,7 +140,7 @@
       return;
     }
     openExt('tel:' + t);
-    if (!/iPhone|Android/.test(navigator.userAgent)) setTimeout(function(){ openExt('shortcuts://run-shortcut?name=ACTR_CALL'); }, 400);
+    if (!/iPhone|Android/.test(navigator.userAgent)) setTimeout(function(){ openExt('actrcall://go'); }, 400);
   }
   /* 🧪 テスト発信：自分の携帯にかけて、電話の仕組みが動くか確かめる（録音・架電履歴には残さない） */
   var MY_TEL = '09057015693';
