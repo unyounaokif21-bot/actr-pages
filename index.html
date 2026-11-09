@@ -495,14 +495,24 @@
       if (autoVoiced()) AUTO.voice += 200;
       var sec = Math.floor((Date.now() - t0) / 1000);
       autoNote('🤖 オート中：' + (second ? '2回目' : '1回目') + 'の呼び出し ' + sec + ' / ' + AUTO_RING + '秒（相手が出たら止まります）');
-      if (AUTO.voice >= 1500) {                                // 出た → オートを止めて、社長が話す
-        clearInterval(AUTO.timer); autoStop('🗣 相手が出ました。オートを止めました。ここからは話してください（終わったら緑のボタン）');
-        send({ type: 'auto_connected', tel: tel, name: name });
-        try { new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=').play(); } catch(x) {}
+      if (AUTO.voice >= 1500 && !AUTO.checking) {              // 声が聞こえた → 留守電か本人かを、相手側の5秒を文字にして確かめる（11/9 社長指示：留守電なら切ってSMS）
+        AUTO.checking = true; clearInterval(AUTO.timer);
+        autoNote('🔎 留守電か、本人が出たかを確かめています…（5秒）');
+        autoVmCheck(function(isVm){
+          AUTO.checking = false; if (!AUTO.on) return;
+          if (isVm) { autoNote('📼 留守電でした → 切って次へ進みます'); autoNoAnswer(second); return; }
+          autoStop('🗣 相手が出ました。オートを止めました。ここからは話してください（終わったら緑のボタン）');
+          send({ type: 'auto_connected', tel: tel, name: name });
+        });
         return;
       }
       if (sec >= AUTO_RING) {                                  // 出なかった → 切る → 次へ
-        clearInterval(AUTO.timer);
+        clearInterval(AUTO.timer); autoNoAnswer(second);
+      }
+    }, 200);
+  }
+  /* 出なかった・留守電だった：切る → 1回目ならSMS → 2回目、2回目なら記録して次の人へ */
+  function autoNoAnswer(second){
         openExt('actrcall://hangup');
         setTimeout(function(){
           if (!AUTO.on) return;
@@ -517,8 +527,26 @@
             }, 300);
           }
         }, 1500);
-      }
-    }, 200);
+  }
+  /* 相手側（Macから出る音）を5秒録って文字にし、留守電の案内かどうかを見る */
+  function autoVmCheck(done){
+    var VM = /留守番電話|留守電|発信音の後|発信音のあと|ピーという|ただいま電話に出ることができません|おかけになった電話|電波の届かない|電源が入っていない|お呼びしましたが|メッセージをお預かり|お名前とご用件/;
+    try {
+      var st = new MediaStream(sysStream.getAudioTracks()), type = ['audio/webm;codecs=opus', 'audio/webm'].filter(function(t){ return MediaRecorder.isTypeSupported(t); })[0] || '';
+      var r = new MediaRecorder(st, type ? { mimeType: type } : undefined), parts = [];
+      r.ondataavailable = function(e){ if (e.data && e.data.size) parts.push(e.data); };
+      r.onstop = function(){
+        var blob = new Blob(parts, { type: r.mimeType || 'audio/webm' }), fr = new FileReader();
+        fr.onload = function(){
+          rpc('区切りの文字起こし', [String(fr.result).split(',')[1], blob.type, 'them', name]).then(function(x){
+            var text = x && x.ok ? (x.segs || []).map(function(g){ return g.text; }).join('') : '';
+            done(VM.test(text));
+          }).catch(function(){ done(false); });
+        };
+        fr.readAsDataURL(blob);
+      };
+      r.start(); setTimeout(function(){ try { r.stop(); } catch(x) { done(false); } }, 5000);
+    } catch(e) { done(false); }
   }
   $('#autoBtn').onclick = function(){
     if (AUTO.on) { autoStop('■ オートを止めました'); return; }
