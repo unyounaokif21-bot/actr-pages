@@ -257,8 +257,13 @@
   $('#viaPhone').checked = VIA_PHONE; $('#phoneNote').style.display = VIA_PHONE ? '' : 'none';
   $('#viaBadge').style.display = VIA_PHONE ? 'block' : 'none';
   $('#viaPhone').onchange = function(){ VIA_PHONE = this.checked; $('#viaBadge').style.display = VIA_PHONE ? 'block' : 'none'; $('#phoneNote').style.display = VIA_PHONE ? '' : 'none'; try { localStorage.setItem('viaPhone2', VIA_PHONE ? '1' : '0'); } catch(x) {} };
+  var MIC_KEEP = null;
+  function micLive(){ return !!(MIC_KEEP && MIC_KEEP.getAudioTracks().some(function(t){ return t.readyState === 'live'; })); }
+  async function micGet(){ if (micLive()) return MIC_KEEP; MIC_KEEP = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: 1 } }); return MIC_KEEP; }
+  function toolBridgeOk(){ try { return !!(window.opener && !window.opener.closed && window.opener.BRIDGE_OK); } catch(x) { return false; } }
   $('#start').onclick = async function(){
-    // 11/9：発信はいちばん最初に（ボタンを押した操作のうちに）。画面共有やマイクの許可を先に聞くと、Chromeが発信を止めるため
+    // 11/9：受付の窓があるときは、先にマイクを取ってから発信する（鳴り始めてからだとマイクが取れない）。ないときは、発信を先に（ボタンを押した操作のうちに）
+    if (toolBridgeOk() && !micLive()) { try { await micGet(); } catch(x) {} }
     if (tel) { if (NODIAL) { NODIAL = false; } else { rpc('発信した', [tel, name]).catch(function(){}); dialTel(tel, name, function(t){ $('#state').textContent = t; }); } }   // 11/9：ツールの「電話する」から来たときは、ツールが発信済み
     EAR = $('#earMode').checked;
     var sysLive = sysAdopt();
@@ -273,7 +278,7 @@
     PREP = null; var pt = tel;                          // 不在のときのSMSを、発信と同時に用意しておく（押したらすぐ送るため）
     if (tel) rpc('不在の準備', [tel, name]).then(function(r){ if (r && r.ok && pt === tel) { r.tel = pt; PREP = r; } }).catch(function(){});
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });   // 11/9 社長指示：まわりの音を減らす（Chromeの雑音抑制をオン）
+      stream = await micGet();   // 11/9：マイクは1回取ったら持ち続ける（電話が鳴り始めるとMacがマイクを押さえて、取り直せなくなるため）   // 11/9 社長指示：まわりの音を減らす（Chromeの雑音抑制をオン）
       micStream = stream;
       if (EAR && sysStream) {                          // マイク＋Macから出る音を1本に混ぜて録音する
         mixCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -597,7 +602,7 @@
     var who = { tel: tel, name: name }, trLive = full;          // この通話の人と聞き取りを、ここで固定する（このあと次の人に進んでも混ざらない）
     var splitP = SPLIT ? splitStop() : null;                     // 話者別の録音は、マイクを止める前に締める
     media.onstop = async function(){
-      [stream, micStream].forEach(function(s){ try { s && s.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {} });   // 画面共有（相手の声）は止めずに次の電話でも使う
+      [stream, micStream].forEach(function(s){ try { if (s && s !== MIC_KEEP) s.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {} });   // 画面共有（相手の声）は止めずに次の電話でも使う
       try { mixCtx && mixCtx.close(); } catch(x) {}
       var blob = new Blob(chunks, { type: media.mimeType || 'audio/webm' }), useEar = EAR;
       var secs = Math.round((Date.now() - t0) / 1000);
@@ -699,7 +704,7 @@
     try { rec && rec.stop(); } catch(x) {}
     clearInterval(iv);
     try { if (media && media.state !== 'inactive') { media.onstop = null; media.stop(); } } catch(x) {}
-    try { stream && stream.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {}
+    try { if (stream && stream !== MIC_KEEP) stream.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {}
     resetMain(); PREP = null; SECOND = '';
     var cd = card(who); cd.st('📵 2回目も不在として記録しています…');
     send({ type: 'second_done', tel: who.tel, name: who.name });
@@ -718,7 +723,7 @@
     try { rec && rec.stop(); } catch(x) {}
     clearInterval(iv);
     try { if (media && media.state !== 'inactive') { media.onstop = null; media.stop(); } } catch(x) {}
-    try { stream && stream.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {}
+    try { if (stream && stream !== MIC_KEEP) stream.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {}
     resetMain();
     var prep = PREP && PREP.tel === who.tel ? PREP : null, again = SECOND === who.tel; PREP = null; SECOND = '';
     var vmNow = $('#vmLeft').checked;
