@@ -55,6 +55,12 @@
   <h1>通話の録音・聞き取り</h1>
   <div class="who" id="who"></div>
   <div id="step" style="display:none;margin:4px 0 8px;padding:7px 10px;background:#FFF3E0;color:#5C3A00;border-left:4px solid #E8A33D;font-weight:800;font-size:14px;border-radius:3px"></div>
+  <style>#start, #stop, #noans, #no2 { display: none !important; }</style><!-- 11/9：ボタンはワンボタンに1つにまとめた（元のボタンは中で使うので残して隠す） -->
+  <!-- 11/9 社長指示：ボタン1個で進む（①電話 → 出なかったら ②切ってSMS→すぐ2回目 → ③2回目も出なかったら次の人へ）。話せたら緑のボタン -->
+  <button id="one" type="button" style="font-size:20px;padding:16px;font-weight:900;background:#0E6E66;color:#fff;border:0;border-radius:10px;width:100%">① 📞 電話する</button>
+  <button id="oneTalk" type="button" style="display:none;margin-top:6px;font-size:15px;padding:11px;font-weight:800;background:#2E7D32;color:#fff;border:0;border-radius:10px;width:100%">✅ 話せた → 電話が終わったら押す（保存）</button>
+  <div id="oneNote" style="font-size:12.5px;color:#5C6C78;margin:4px 0 8px"></div>
+  <div id="oneCheck"></div>
   <button id="start">📞 発信して記録開始</button>
   <div id="viaBadge" style="display:none;margin-top:6px;font-size:12.5px;font-weight:800;color:#1565C0">📱 iPhoneで発信する設定になっています</div>
   <details class="fold" id="setFold"><summary>⚙ 設定（iPhoneで発信・イヤホン・テスト発信）</summary>
@@ -62,6 +68,7 @@
   <div id="earNote" class="note" style="display:none;margin-top:4px">押すと「画面を共有」が出ます →「画面全体」を選び、<b>「システムの音声も共有」にチェック</b>して「共有」。画面の映像は使わず、音だけ録ります。通話のあと、このMacの中で文字起こしします（無料・外に送りません）。</div>
   <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:6px"><input type="checkbox" id="viaPhone" style="width:auto"> 📱 iPhoneで発信（Macを通さない・呼び出し音が鳴らない問題が起きない）</label>
   <div id="phoneNote" class="note" style="display:none;margin-top:4px">iPhoneで <b>unyounaokif21-bot.github.io/actr-pages/call/</b> を開いて「待ち受けを始める」を押しておくと、発信のたびにかける人のボタンが出ます。iPhoneはスピーカーにしてMacの近くに置いてください（Macのマイクで録音します）。</div>
+  <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:6px"><input type="checkbox" id="autoHang" style="width:auto"> 📴 ボタンで電話も自動で切る（Macのショートカット「ACTR_HANGUP」を作ってあるときだけ）</label>
   <button id="testDial" type="button" style="margin-top:8px;background:#fff;color:#1565C0;border:2px solid #1565C0;font-size:14px;padding:9px">🧪 自分の携帯にテスト発信（090-5701-5693）</button>
   </details>
   <div id="testNote" class="note" style="display:none;margin-top:4px"></div>
@@ -351,6 +358,66 @@
     });
   }
 
+  /* ═════ 11/9 社長指示：ボタン1個で進む。状態を見て、ボタンの役目を変える ═════
+     ① 電話する → ② 出なかった：（自動で切る設定なら切って）不在を記録・1通目のSMSは自動で送る → すぐ2回目をかける
+     → ③ 2回目も出なかった：記録して業務ツールは次の人へ → 前の人の登録内容を見せて、OK か 声で直す
+     話せたときは緑の「話せた → 終わったら押す」で保存（いつもの流れ） */
+  var ONE_AUTO2 = true;
+  function hangup(){ try { if (localStorage.getItem('AUTO_HANGUP') === '1') openExt('shortcuts://run-shortcut?name=' + encodeURIComponent('ACTR_HANGUP')); } catch(x) {} }
+  function oneDraw(){
+    var b = $('#one'), t = $('#oneTalk'), n = $('#oneNote'); if (!b) return;
+    var inCall = $('#stop').style.display === 'block', second = SECOND === tel;
+    if (!tel) { b.textContent = '業務ツールで人を選んでください'; b.disabled = true; t.style.display = 'none'; return; }
+    b.disabled = false;
+    if (!inCall) { b.textContent = second ? '② 📞 2回目をかける' : '① 📞 電話する'; b.style.background = '#0E6E66'; t.style.display = 'none'; n.textContent = ''; return; }
+    t.style.display = 'block';
+    if (second) { b.textContent = '③ 📵 2回目も出なかった → 次の人へ'; b.style.background = '#B26A00'; n.textContent = '出たら緑のボタン（話し終わったら押す）。出なければオレンジを押すと、記録して業務ツールが次の人へ進みます'; }
+    else { b.textContent = '② 📵 出なかった → SMS → すぐ2回目'; b.style.background = '#C62828'; n.textContent = '出たら緑のボタン（話し終わったら押す）。出なければ赤を押すと、不在を記録してSMSを送り、すぐ2回目をかけます'; }
+  }
+  setInterval(oneDraw, 500);
+  $('#one').onclick = function(){
+    var inCall = $('#stop').style.display === 'block';
+    if (!inCall) { $('#start').click(); return; }
+    hangup();
+    if (SECOND === tel) { var who = { tel: tel, name: name }; $('#no2').click(); oneCheck(who); return; }
+    var t0 = tel; $('#noans').click();
+    if (!ONE_AUTO2) return;
+    var tries = 0, w = setInterval(function(){                 // 1通目のSMSを自動で送ったら（「もう一回かける」が出たら）、すぐ2回目をかける
+      tries++; var a = document.getElementById('again');
+      if (tel !== t0 || tries > 40) { clearInterval(w); return; }
+      if (a) { clearInterval(w); setTimeout(function(){ if (tel === t0 && document.getElementById('again')) document.getElementById('again').click(); }, 1200); }
+    }, 300);
+  };
+  $('#oneTalk').onclick = function(){ var who = { tel: tel, name: name }; hangup(); $('#stop').click(); setTimeout(function(){ oneCheck(who, true); }, 25000); };
+  /* 前の人の登録内容を見せる。OK で閉じる。違っていたら声で直す（進捗メモに「訂正」を足す） */
+  function oneCheck(who, talked){
+    var box = document.createElement('div');
+    box.style.cssText = 'margin:6px 0;padding:8px 10px;border:2px solid #1565C0;border-radius:8px;background:#F3F8FF;font-size:13px';
+    box.innerHTML = '<b>📝 ' + esc(who.name || who.tel) + 'さん：こう登録しました（読み込み中…）</b>';
+    $('#oneCheck').insertBefore(box, $('#oneCheck').firstChild);
+    setTimeout(function(){
+      rpc('登録の確認', [who.tel]).then(function(r){
+        r = r || {};
+        box.innerHTML = '<b>📝 ' + esc(who.name || who.tel) + 'さん：こう登録しました。間違いないですか？</b>'
+          + '<div style="margin:3px 0">状態：<b>' + esc(r.status || '') + '</b></div>'
+          + '<div style="white-space:pre-wrap;color:#37474F;font-size:12.5px">' + esc((r.last || []).join('\n')) + (r.memo ? '\n— メモ —\n' + esc(r.memo) : '') + '</div>'
+          + '<div style="display:flex;gap:6px;margin-top:6px"><button type="button" class="ckOk" style="flex:1;padding:8px;font-weight:800;background:#1565C0;color:#fff;border:0;border-radius:6px">OK（このまま）</button>'
+          + '<button type="button" class="ckFix" style="flex:1;padding:8px;font-weight:800">🎤 声で直す</button></div><div class="ckNote" style="font-size:12px;margin-top:3px"></div>';
+        box.querySelector('.ckOk').onclick = function(){ box.remove(); };
+        box.querySelector('.ckFix').onclick = function(){
+          var SRx = window.SpeechRecognition || window.webkitSpeechRecognition, nt = box.querySelector('.ckNote'); if (!SRx) { nt.textContent = 'このブラウザでは声の入力が使えません'; return; }
+          var r2 = new SRx(); r2.lang = 'ja-JP'; r2.interimResults = false; nt.textContent = '🎤 どう直すか話してください…（例：「出た。夕方6時にかけ直す」）';
+          r2.onresult = function(e){ var how = e.results[0][0].transcript; nt.textContent = '「' + how + '」で直しています…';
+            rpc('記録を直す', [who.tel, how, who.name]).then(function(x){ nt.textContent = x && x.ok ? '✅ メモに足しました：' + x.line : '直せませんでした'; setTimeout(function(){ box.remove(); }, 6000); })
+              .catch(function(err){ nt.textContent = '直せませんでした：' + err.message; }); };
+          r2.onerror = function(){ nt.textContent = '聞き取れませんでした。もう一度押してください'; };
+          r2.start();
+        };
+      }).catch(function(){ box.innerHTML = '<b>📝 ' + esc(who.name || who.tel) + 'さん：登録内容を読み込めませんでした（業務ツールで確認してください）</b>'; setTimeout(function(){ box.remove(); }, 8000); });
+    }, talked ? 0 : 6000);
+  }
+
+  try { $('#autoHang').checked = localStorage.getItem('AUTO_HANGUP') === '1'; $('#autoHang').onchange = function(){ try { localStorage.setItem('AUTO_HANGUP', this.checked ? '1' : '0'); } catch(x) {} }; } catch(x) {}
   /* 長すぎる録音の確認：40分たったら「まだ通話中？」を出し、60秒反応がなければ自動で止める */
   var LONG_SEC = 40 * 60, nextCheck = LONG_SEC, longOpen = false, longIv = null;
   function askLong(s){
