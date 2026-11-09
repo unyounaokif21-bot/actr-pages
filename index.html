@@ -262,7 +262,9 @@
     if (tel) { if (NODIAL) { NODIAL = false; } else { rpc('発信した', [tel, name]).catch(function(){}); dialTel(tel, name, function(t){ $('#state').textContent = t; }); } }   // 11/9：ツールの「電話する」から来たときは、ツールが発信済み
     EAR = $('#earMode').checked;
     var sysLive = sysAdopt();
-    if (EAR && !sysLive) {
+    var byHand = !navigator.userActivation || navigator.userActivation.isActive;   // 11/9：自動で始まったとき（ボタンを押していない）は、画面共有の選択窓を出さない（出すとそこで止まる）
+    if (EAR && !sysLive && !byHand) { $('#state').innerHTML = '<b style="color:#C62828">⚠ 相手の声を録る準備ができていません。今回は自分の声だけ録ります。</b>業務ツールの「🎧 相手の声の準備」を押しておいてください。'; }
+    if (EAR && !sysLive && byHand) {
       try {
         sysStream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'monitor' }, audio: { echoCancellation: false, noiseSuppression: false }, systemAudio: 'include', selfBrowserSurface: 'exclude', monitorTypeSurfaces: 'include', surfaceSwitching: 'exclude' });
       } catch (e) { sysStream = null; $('#state').innerHTML = '<b style="color:#C62828">⚠ 相手の声を録る準備（画面の共有）ができていません。今回は自分の声だけ録ります。</b>次の電話の前に、上の「🎧 相手の声を録る準備」を押してください。'; }
