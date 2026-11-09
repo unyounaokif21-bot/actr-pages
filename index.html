@@ -254,10 +254,22 @@
       if (EAR && sysStream) {                          // マイク＋Macから出る音を1本に混ぜて録音する
         mixCtx = new (window.AudioContext || window.webkitAudioContext)();
         var dest = mixCtx.createMediaStreamDestination();
-        mixCtx.createMediaStreamSource(micStream).connect(dest);
+        // 11/9 社長指示：①相手の声が小さい → 相手側を大きくして、両方を圧縮して同じくらいの音量にそろえる
+        //              ②声が二重 → 相手の声がイヤホンから漏れてマイクにも入っていた。相手が話している間（相手の音が大きく、マイクの方が小さい）は、マイクを下げる
+        var comp = function(){ var c = mixCtx.createDynamicsCompressor(); c.threshold.value = -30; c.knee.value = 20; c.ratio.value = 6; c.attack.value = 0.005; c.release.value = 0.25; return c; };
+        var micSrc = mixCtx.createMediaStreamSource(micStream), micGain = mixCtx.createGain(), micComp = comp(), micAn = mixCtx.createAnalyser(); micAn.fftSize = 512;
+        micSrc.connect(micAn); micSrc.connect(micGain); micGain.connect(micComp); micComp.connect(dest);
         if (sysStream.getAudioTracks().length) {
           var sysSrc = mixCtx.createMediaStreamSource(new MediaStream(sysStream.getAudioTracks()));
-          sysSrc.connect(dest); meterStart(mixCtx, sysSrc);      // 相手の声（Macから出る音）が本当に入っているかを、メーターで見せる
+          var sysGain = mixCtx.createGain(), sysComp = comp(), sysAn = mixCtx.createAnalyser(); sysAn.fftSize = 512; sysGain.gain.value = 2.5;
+          sysSrc.connect(sysAn); sysSrc.connect(sysGain); sysGain.connect(sysComp); sysComp.connect(dest);
+          meterStart(mixCtx, sysSrc);      // 相手の声（Macから出る音）が本当に入っているかを、メーターで見せる
+          var bm = new Float32Array(512), bs = new Float32Array(512), rms = function(an, b){ an.getFloatTimeDomainData(b); var t = 0; for (var i = 0; i < b.length; i++) t += b[i] * b[i]; return Math.sqrt(t / b.length); };
+          var duck = setInterval(function(){
+            if (!mixCtx || mixCtx.state === 'closed') { clearInterval(duck); return; }
+            var m = rms(micAn, bm), y = rms(sysAn, bs), quiet = y > 0.01 && m < y * 1.5;   // 相手の音が出ていて、マイクの方が目立って大きくない → 漏れとみなす
+            micGain.gain.setTargetAtTime(quiet ? 0.12 : 1, mixCtx.currentTime, quiet ? 0.03 : 0.08);
+          }, 50);
         } else meterNone();
         stream = dest.stream;
       }
