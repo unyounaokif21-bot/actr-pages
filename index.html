@@ -249,7 +249,7 @@
     if (tel) rpc('不在の準備', [tel, name]).then(function(r){ if (r && r.ok && pt === tel) { r.tel = pt; PREP = r; } }).catch(function(){});
     if (tel) { rpc('発信した', [tel, name]).catch(function(){}); dialTel(tel, name, function(t){ $('#state').textContent = t; }); }
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true, channelCount: 1 } });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });   // 11/9 社長指示：まわりの音を減らす（Chromeの雑音抑制をオン）
       micStream = stream;
       if (EAR && sysStream) {                          // マイク＋Macから出る音を1本に混ぜて録音する
         mixCtx = new (window.AudioContext || window.webkitAudioContext)();
