@@ -60,6 +60,8 @@
   <button id="one" type="button" style="font-size:20px;padding:16px;font-weight:900;background:#0E6E66;color:#fff;border:0;border-radius:10px;width:100%">① 📞 電話する</button>
   <button id="oneTalk" type="button" style="display:none;margin-top:6px;font-size:15px;padding:11px;font-weight:800;background:#2E7D32;color:#fff;border:0;border-radius:10px;width:100%">✅ 話せた → 電話が終わったら押す（保存）</button>
   <button id="sysPrep" type="button" style="display:none;margin-top:6px;font-size:15px;padding:11px;font-weight:800;background:#1565C0;color:#fff;border:0;border-radius:10px;width:100%">🎧 相手の声を録る準備（最初に1回だけ押す）</button>
+  <button id="autoBtn" type="button" style="margin-top:6px;font-size:15px;padding:10px;font-weight:900;background:#4A148C;color:#fff;border:0;border-radius:10px;width:100%">▶ オートモード（自動でどんどんかける）</button>
+  <div id="autoNote" style="display:none;font-size:12.5px;font-weight:700;color:#4A148C;margin-top:3px"></div>
   <div id="oneNote" style="font-size:12.5px;color:#5C6C78;margin:4px 0 8px"></div>
   <div id="oneCheck"></div>
   <button id="start">📞 発信して記録開始</button>
@@ -436,6 +438,78 @@
       $('#state').textContent = '✅ 相手の声を録る準備ができました。このウィンドウを閉じなければ、次の電話からもそのまま録れます。';
     } catch(e) { $('#state').textContent = '画面の共有がキャンセルされました。もう一度押してください。'; }
   };
+
+  /* ═════ 11/9 社長指示：オートモード。押すと自動でどんどん進む ═════
+     発信 → 25秒待つ → 相手の声を聞き取ったら（出たら）オートを止めて、ツールでその人の画面を開く（ここからは社長が話す）
+     → 声がなければ自動で切る → 不在を記録・1通目のSMSは自動 → すぐ2回目 → また25秒 → 出なければ切って記録 → 業務ツールが次の人を出して、また発信
+     留守電は自動では残さない（Macから声を流せないため）。9時〜20時だけ動く */
+  var AUTO = { on: false, timer: null, voice: 0, an: null, ctx: null };
+  var AUTO_RING = 25;
+  function autoNote(t){ var n = $('#autoNote'); n.style.display = t ? 'block' : 'none'; n.textContent = t || ''; }
+  function autoStop(why){
+    AUTO.on = false; clearInterval(AUTO.timer); AUTO.timer = null; try { AUTO.ctx && AUTO.ctx.close(); } catch(x) {} AUTO.ctx = null;
+    $('#autoBtn').textContent = '▶ オートモード（自動でどんどんかける）'; $('#autoBtn').style.background = '#4A148C'; autoNote(why || '');
+    try { localStorage.setItem('AUTO_ON', '0'); } catch(x) {}
+  }
+  function autoHours(){ var h = new Date().getHours(); return h >= 9 && h < 20; }
+  /* 相手の声らしい音（呼び出し音＝400Hzあたりの一定の音は数えない）が合わせて1.5秒以上あったら「出た」 */
+  function autoListen(){
+    try { AUTO.ctx && AUTO.ctx.close(); } catch(x) {}
+    AUTO.voice = 0; if (!sysLiveNow()) return;
+    AUTO.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    var src = AUTO.ctx.createMediaStreamSource(new MediaStream(sysStream.getAudioTracks())), an = AUTO.ctx.createAnalyser(); an.fftSize = 2048; src.connect(an); AUTO.an = an;
+  }
+  function autoVoiced(){
+    var an = AUTO.an; if (!an || !AUTO.ctx) return false;
+    var f = new Float32Array(an.frequencyBinCount); an.getFloatFrequencyData(f);
+    var hz = AUTO.ctx.sampleRate / an.fftSize, tot = 0, tone = 0, voice = 0;
+    for (var i = 1; i < f.length; i++) { var p = Math.pow(10, f[i] / 10), fr = i * hz; tot += p; if (fr > 350 && fr < 450) tone += p; if (fr > 250 && fr < 3500) voice += p; }
+    return tot > 1e-6 && voice / tot > 0.5 && tone / tot < 0.45 && 10 * Math.log10(tot) > -55;
+  }
+  function autoStep(){                                         // 発信してからの見張り（0.2秒ごと）
+    var t0 = Date.now(), second = SECOND === tel; autoListen();
+    clearInterval(AUTO.timer);
+    AUTO.timer = setInterval(function(){
+      if (!AUTO.on) { clearInterval(AUTO.timer); return; }
+      if (autoVoiced()) AUTO.voice += 200;
+      var sec = Math.floor((Date.now() - t0) / 1000);
+      autoNote('🤖 オート中：' + (second ? '2回目' : '1回目') + 'の呼び出し ' + sec + ' / ' + AUTO_RING + '秒（相手が出たら止まります）');
+      if (AUTO.voice >= 1500) {                                // 出た → オートを止めて、社長が話す
+        clearInterval(AUTO.timer); autoStop('🗣 相手が出ました。オートを止めました。ここからは話してください（終わったら緑のボタン）');
+        send({ type: 'auto_connected', tel: tel, name: name });
+        try { new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=').play(); } catch(x) {}
+        return;
+      }
+      if (sec >= AUTO_RING) {                                  // 出なかった → 切る → 次へ
+        clearInterval(AUTO.timer);
+        openExt('actrcall://hangup');
+        setTimeout(function(){
+          if (!AUTO.on) return;
+          if (second) { var who = { tel: tel, name: name }; $('#no2').click(); send({ type: 'auto_next', tel: who.tel }); autoNote('🤖 2回目も不在 → 次の人へ…'); }
+          else {
+            var t1 = tel; $('#noans').click(); autoNote('🤖 不在 → SMS → 2回目をかけます…');
+            var tries = 0, w = setInterval(function(){
+              tries++; if (!AUTO.on || tel !== t1) { clearInterval(w); return; }
+              var a = document.getElementById('again');
+              if (a) { clearInterval(w); setTimeout(function(){ if (AUTO.on && tel === t1) document.getElementById('again').click(); }, 800); }
+              else if (tries > 25) { clearInterval(w); SECOND = t1; stepShow('📞 いま：セットの2回目（SMSは確認待ち）'); $('#start').click(); }   // 2通目以降のSMSは確認が要るので、送らずに2回目へ（SMSは下のカードに残る）
+            }, 300);
+          }
+        }, 1500);
+      }
+    }, 200);
+  }
+  $('#autoBtn').onclick = function(){
+    if (AUTO.on) { autoStop('■ オートを止めました'); return; }
+    if (!autoHours()) { alert('オートモードは9時〜20時だけ動きます'); return; }
+    if (!sysLiveNow()) { alert('先に「🎧 相手の声を録る準備」を押してください（出たかどうかを、相手の声で見分けるため）'); return; }
+    AUTO.on = true; try { localStorage.setItem('AUTO_ON', '1'); } catch(x) {}
+    $('#autoBtn').textContent = '■ オートを止める'; $('#autoBtn').style.background = '#C62828';
+    if ($('#stop').style.display === 'block') autoStep(); else $('#start').click();
+  };
+  // 発信が始まるたびに（オート中なら）見張りを始める
+  setInterval(function(){ var inCall = $('#stop').style.display === 'block'; if (AUTO.on && inCall && !AUTO.timer && autoHours()) autoStep(); if (AUTO.on && !autoHours()) autoStop('🌙 20時になったのでオートを止めました'); }, 400);
+  (function(){ var st = $('#start'); var orig = st.onclick; st.addEventListener('click', function(){ if (AUTO.on) { clearInterval(AUTO.timer); AUTO.timer = null; } }); })();
 
   /* 長すぎる録音の確認：40分たったら「まだ通話中？」を出し、60秒反応がなければ自動で止める */
   var LONG_SEC = 40 * 60, nextCheck = LONG_SEC, longOpen = false, longIv = null;
