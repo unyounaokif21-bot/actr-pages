@@ -263,13 +263,21 @@
   $('#viaPhone').onchange = function(){ VIA_PHONE = this.checked; $('#viaBadge').style.display = VIA_PHONE ? 'block' : 'none'; $('#phoneNote').style.display = VIA_PHONE ? '' : 'none'; try { localStorage.setItem('viaPhone2', VIA_PHONE ? '1' : '0'); } catch(x) {} };
   var MIC_KEEP = null;
   function micLive(){ return !!(MIC_KEEP && MIC_KEEP.getAudioTracks().some(function(t){ return t.readyState === 'live'; })); }
-  async function micGet(){ if (micLive()) return MIC_KEEP; MIC_KEEP = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: 1 } }); return MIC_KEEP; }
+  async function micGet(){
+    if (micLive()) return MIC_KEEP;
+    var c = { echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: 1 };
+    try { var ds = await navigator.mediaDevices.enumerateDevices(), sk = ds.filter(function(d){ return d.kind === 'audioinput' && /Shokz|OpenComm/i.test(d.label) && d.deviceId !== 'default'; })[0]; if (sk && $('#earMode').checked) c.deviceId = { exact: sk.deviceId }; } catch(x) {}   // 自分の声はShokzのマイク（BlackHoleを自分の声にしない）
+    MIC_KEEP = await navigator.mediaDevices.getUserMedia({ audio: c });
+    if (MIC_KEEP.getAudioTracks().some(function(t){ return /BlackHole/i.test(t.label); })) { MIC_KEEP.getTracks().forEach(function(t){ t.stop(); }); delete c.deviceId; MIC_KEEP = null; throw new Error('マイクがBlackHoleになっています。サウンド設定の「入力」をShokzにしてください'); }
+    return MIC_KEEP;
+  }
   function toolBridgeOk(){ try { return !!(window.opener && !window.opener.closed && window.opener.BRIDGE_OK); } catch(x) { return false; } }
   $('#start').onclick = async function(){
     // 11/9：受付の窓があるときは、先にマイクを取ってから発信する（鳴り始めてからだとマイクが取れない）。ないときは、発信を先に（ボタンを押した操作のうちに）
     if (toolBridgeOk() && !micLive()) { try { await micGet(); } catch(x) {} }
     if (tel) { if (NODIAL) { NODIAL = false; } else { rpc('発信した', [tel, name]).catch(function(){}); dialTel(tel, name, function(t){ $('#state').textContent = t; }); } }   // 11/9：ツールの「電話する」から来たときは、ツールが発信済み
     EAR = $('#earMode').checked;
+    if (EAR) { try { if (!micLive()) await micGet(); } catch(x) {} await bhGet(); }   // 11/9：BlackHoleがあれば、それを相手の声にする
     var sysLive = sysAdopt();
     var byHand = !navigator.userActivation || navigator.userActivation.isActive;   // 11/9：自動で始まったとき（ボタンを押していない）は、画面共有の選択窓を出さない（出すとそこで止まる）
     if (EAR && !sysLive && !byHand) { $('#state').innerHTML = '<b style="color:#C62828">⚠ 相手の声を録る準備ができていません。今回は自分の声だけ録ります。</b>業務ツールの「🎧 相手の声の準備」を押しておいてください。'; }
@@ -456,8 +464,22 @@
   /* 11/9：相手の声（Macから出る音）を録るには、画面共有で「システムの音声」を許可する必要がある。これは自分で押したときしか出せないので、
      電話の前に1回押すボタンを出す。共有できていれば消える（同じウィンドウなら次の電話でもそのまま使う） */
   // 11/9：メインのツール画面で「🎧 相手の声の準備」をしてあれば、その共有をそのまま使う（同じサイトなので受け取れる）
+  /* 11/9：電話の音は画面共有では録れないので、仮想の音の機器「BlackHole」に流して、それを相手の声として録る（入っていれば画面共有より優先） */
+  var BH_KEEP = null;
+  function bhLive(){ return !!(BH_KEEP && BH_KEEP.getAudioTracks().some(function(t){ return t.readyState === 'live'; })); }
+  async function bhGet(){
+    if (bhLive()) return BH_KEEP;
+    try {
+      var ds = await navigator.mediaDevices.enumerateDevices(), bh = ds.filter(function(d){ return d.kind === 'audioinput' && /BlackHole/i.test(d.label); })[0];
+      if (!bh) return null;
+      BH_KEEP = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: bh.deviceId }, echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+      return BH_KEEP;
+    } catch(x) { return null; }
+  }
+  try { navigator.permissions.query({ name: 'microphone' }).then(function(r){ if (r.state === 'granted') bhGet(); }); } catch(x) {}   // 開いたときに先に取っておく（鳴り始めてからだと取れないことがある）
   function sysAdopt(){
     var live = function(st){ return !!(st && st.getAudioTracks().some(function(t){ return t.readyState === 'live'; })); };
+    if (bhLive()) { sysStream = BH_KEEP; return true; }
     if (live(sysStream)) return true;
     try { var os = window.opener && window.opener.SYS_STREAM; if (live(os)) { sysStream = os; return true; } } catch(x) {}
     return false;
