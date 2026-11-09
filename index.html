@@ -140,8 +140,8 @@
         .catch(function(e){ say('iPhoneに送れませんでした：' + e.message + '　iPhoneで番号を押してかけてください：' + t); });
       return;
     }
-    openExt('tel:' + t);
-    if (!/iPhone|Android/.test(navigator.userAgent)) setTimeout(function(){ openExt('actrcall://go'); }, 400);
+    if (/iPhone|Android/.test(navigator.userAgent)) { openExt('tel:' + t); return; }
+    openExt('actrcall://dial/' + String(t).replace(/[^0-9]/g, ''));   // 11/9：発信と「通話」押しを ACTR通話.app 1つでやる（Chromeは続けて2つ開くと2つ目を止めるため）
   }
   /* 🧪 テスト発信：自分の携帯にかけて、電話の仕組みが動くか確かめる（録音・架電履歴には残さない） */
   var MY_TEL = '09057015693';
