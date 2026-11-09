@@ -174,6 +174,7 @@
   function foldOld(){ document.querySelectorAll('#pend .pc details').forEach(function(d){ d.open = false; }); }
   function pendCount(){ var n = document.querySelectorAll('#pend .pc').length; $('#pendHead').style.display = n ? 'block' : 'none'; $('#pendHead').textContent = '✉ SMSがまだの人（' + n + '人）'; }
   function resetMain(){
+    if (SPLIT) { var sp0 = SPLIT; SPLIT = null; sp0.on = false; clearInterval(sp0.pk_me); clearInterval(sp0.pk_them); sp0.recs.forEach(function(r){ try { r.onstop = null; r.stop(); } catch(x) {} }); try { sp0.ctx.close(); } catch(x) {} }   // 不在などで終わったら、話者別の録音は捨てる
     $('#rec').style.display = 'none'; $('#stop').style.display = 'none'; $('#noans').style.display = 'none'; $('#aiJobs').style.display = 'none'; $('#aiJobsNote').style.display = 'none';
     $('#stop').disabled = false; $('#stop').textContent = '■ 電話を切ったら押す（録音を保存して閉じる）';
     $('#start').style.display = 'block'; $('#live').textContent = ''; $('#clock').textContent = '00:00';
@@ -269,6 +270,7 @@
     chunks = [];
     media.ondataavailable = function(e){ if (e.data && e.data.size) chunks.push(e.data); };
     media.start(5000);
+    try { if (EAR && CLOUD_TR && sysStream && sysStream.getAudioTracks().length) splitStart(micStream, new MediaStream(sysStream.getAudioTracks()), name); } catch(x) { SPLIT = null; }
     startRecognition();
     t0 = Date.now();
     nextCheck = LONG_SEC;
@@ -282,6 +284,60 @@
     send({ type: 'started' });
     ringStart();
   };
+
+  /* 11/9 社長指示：話者を分けて録音・文字起こし（円丸と同じ仕組み）
+     ・自分＝マイクだけ、相手＝Macから出る音（画面共有の「システムの音声」）だけを、別々の録音機で録る
+     ・30秒ごとに録り直して1つずつ完全なファイルにする（先頭が欠けて聞けない録音にならない）。無音の区切りは送らない（お金の節約）
+     ・ツールで whisper-1 にかけ、区切りの中の時刻＋区切りの開始時刻で並べる。イヤホンでない日に相手の声がマイクにも入ったら、相手側だけ残す */
+  var SPLIT = null, SPLIT_SEC = 30;
+  function splitStart(mic, sys, nm){
+    var type = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].filter(function(t){ return MediaRecorder.isTypeSupported(t); })[0] || '';
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    SPLIT = { on: true, t0: Date.now(), out: [], queue: Promise.resolve(), ctx: ctx, recs: [], name: nm || '', fails: 0 };
+    var sp = SPLIT;
+    [['me', mic], ['them', sys]].forEach(function(pair){
+      var who = pair[0], stm = pair[1], an = ctx.createAnalyser(); an.fftSize = 1024; ctx.createMediaStreamSource(stm).connect(an);
+      var buf = new Float32Array(an.fftSize), peak = 0, pk = setInterval(function(){ an.getFloatTimeDomainData(buf); var m = 0; for (var i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i])); if (m > peak) peak = m; }, 200);
+      var seg = function(){
+        if (!sp.on) return;
+        var parts = [], at = (Date.now() - sp.t0) / 1000, r = new MediaRecorder(stm, type ? { mimeType: type, audioBitsPerSecond: 24000 } : undefined);
+        peak = 0; sp.recs.push(r);
+        r.ondataavailable = function(e){ if (e.data && e.data.size) parts.push(e.data); };
+        r.onstop = function(){
+          sp.recs = sp.recs.filter(function(x){ return x !== r; });
+          var loud = peak > 0.02; if (sp.on) seg();
+          if (!loud || !parts.length) return;                // 無音の区切りは送らない
+          var blob = new Blob(parts, { type: r.mimeType || type || 'audio/webm' });
+          sp.queue = sp.queue.then(function(){
+            return new Promise(function(ok){ var fr = new FileReader(); fr.onload = function(){ ok(String(fr.result).split(',')[1]); }; fr.readAsDataURL(blob); })
+              .then(function(b64){ return rpc('区切りの文字起こし', [b64, blob.type, who, sp.name]); })
+              .then(function(res){ if (res && res.ok) res.segs.forEach(function(g){ sp.out.push({ who: who, t: at + g.s, text: g.text }); }); else sp.fails++; })
+              .catch(function(){ sp.fails++; });
+          });
+        };
+        r.start();
+        setTimeout(function(){ try { if (r.state !== 'inactive') r.stop(); } catch(x) {} }, SPLIT_SEC * 1000);
+      };
+      sp['pk_' + who] = pk; seg();
+    });
+  }
+  function splitStop(){
+    var sp = SPLIT; SPLIT = null; if (!sp) return Promise.resolve('');
+    sp.on = false; clearInterval(sp.pk_me); clearInterval(sp.pk_them);
+    var wait = Promise.all(sp.recs.slice().map(function(r){ return new Promise(function(ok){ if (r.state === 'inactive') return ok(); var f = r.onstop; r.onstop = function(){ f && f.call(r); ok(); }; try { r.stop(); } catch(x) { ok(); } }); }));
+    return wait.then(function(){ return sp.queue; }).then(function(){
+      try { sp.ctx.close(); } catch(x) {}
+      var gram = function(t){ var g = {}; t = t.replace(/[\s、。！？!?「」]/g, ''); for (var i = 0; i < t.length - 1; i++) g[t.substr(i, 2)] = 1; return g; };
+      var sim = function(a, b){ var A = gram(a), B = gram(b), n = 0, m = 0; Object.keys(A).forEach(function(k){ m++; if (B[k]) n++; }); return m ? n / m : 0; };
+      var them = sp.out.filter(function(x){ return x.who === 'them'; });
+      var lines = sp.out.filter(function(x){                 // 相手の声がマイクにも入った（スピーカーの日）分は、相手側だけ残す
+        return x.who === 'them' || !them.some(function(y){ return Math.abs(y.t - x.t) < 8 && sim(x.text, y.text) > 0.6; });
+      }).sort(function(a, b){ return a.t - b.t; });
+      var out = [], last = null;
+      lines.forEach(function(x){ var lb = x.who === 'me' ? '香川' : '相手'; if (last && last.lb === lb && x.t - last.t < 6) { last.text += x.text; last.t = x.t; } else { last = { lb: lb, t: x.t, text: x.text }; out.push(last); } });
+      return out.map(function(x){ return x.lb + '：' + x.text; }).join('\n') + (sp.fails ? '\n（' + sp.fails + 'か所、文字起こしできなかった区切りがあります）' : '');
+    });
+  }
 
   /* 長すぎる録音の確認：40分たったら「まだ通話中？」を出し、60秒反応がなければ自動で止める */
   var LONG_SEC = 40 * 60, nextCheck = LONG_SEC, longOpen = false, longIv = null;
@@ -309,6 +365,7 @@
     clearInterval(iv);
     $('#stop').disabled = true; $('#stop').textContent = '保存しています…';
     var who = { tel: tel, name: name }, trLive = full;          // この通話の人と聞き取りを、ここで固定する（このあと次の人に進んでも混ざらない）
+    var splitP = SPLIT ? splitStop() : null;                     // 話者別の録音は、マイクを止める前に締める
     media.onstop = async function(){
       [stream, micStream].forEach(function(s){ try { s && s.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {} });   // 画面共有（相手の声）は止めずに次の電話でも使う
       try { mixCtx && mixCtx.close(); } catch(x) {}
@@ -318,7 +375,10 @@
       $('#state').textContent = '通話を保存しています。業務ツールは先に次の人へ進めてOKです（この人の分は下で続けて記録します）。';
       var cd = card(who);
       var tr = trLive;
-      if (useEar && secs >= 45 && !CLOUD_TR) {          // 相手の声も入った録音を、このMacの中で文字起こし（45秒未満の短い電話はしない）。OpenAIの文字起こしが使えるときは業務ツール側でやるので飛ばす
+      if (splitP) {                                     // 11/9 社長指示：自分と相手を別々に録った分を、時刻順に「香川：」「相手：」で並べる
+        cd.st('話者を分けて文字起こししています…（このウィンドウは閉じないでください）');
+        try { var st2 = await splitP; if (st2.length > 10) tr = st2; } catch (e) { cd.st('話者別の文字起こしに失敗しました（' + e.message + '）。聞き取れた分で送ります。'); }
+      } else if (useEar && secs >= 45 && !CLOUD_TR) {          // 相手の声も入った録音を、このMacの中で文字起こし（45秒未満の短い電話はしない）。OpenAIの文字起こしが使えるときは業務ツール側でやるので飛ばす
         cd.st('文字起こししています…（このウィンドウは閉じないでください）');
         try { var wt = await whisperText(blob); if (wt.length > 10) tr = wt; } catch (e) { cd.st('文字起こしに失敗しました（' + e.message + '）。聞き取れた分だけ送ります。'); }
       }
