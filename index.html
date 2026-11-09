@@ -407,7 +407,8 @@
     if (!ONE_AUTO2) return;
     var tries = 0, w = setInterval(function(){                 // 1通目のSMSを自動で送ったら（「もう一回かける」が出たら）、すぐ2回目をかける
       tries++; var a = document.getElementById('again');
-      if (tel !== t0 || tries > 40) { clearInterval(w); return; }
+      if (tel !== t0) { clearInterval(w); return; }
+      if (tries > 20 && !a) { clearInterval(w); SECOND = t0; stepShow('📞 いま：セットの2回目（SMSは下のカードで確認して送る）'); return; }   // 11/9：2通目以降のSMSは確認が要るので、ボタンを「② 2回目をかける」にして待つ
       if (a) { clearInterval(w); setTimeout(function(){ if (tel === t0 && document.getElementById('again')) document.getElementById('again').click(); }, 1200); }
     }, 300);
   };
