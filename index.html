@@ -95,7 +95,7 @@
     <button id="ringNo2" style="background:#B26A00;color:#fff;margin-top:6px">📵 2回目も出なかった → 記録して次の人へ</button>
     <button id="ringYes" style="background:var(--teal);color:#fff">✅ 相手が出た（このまま録音を続ける）</button>
   </div>
-  <div id="rec"><i></i><span id="clock">00:00</span> 録音・聞き取り中</div>
+  <div id="rec"><i></i><span id="clock">00:00</span> <span id="recLbl">呼び出し中（相手が出たら「✅ 相手が出た」）</span></div>
   <div id="sysMeter" style="display:none;margin-top:6px;font-size:13px;font-weight:700"></div>
   <button id="aiJobs" type="button" style="display:none;margin-top:8px;background:#B26A00;color:#fff;font-size:14px;padding:10px">🔎 ここまでを要約して案件を確認（業務ツールに出ます）</button>
   <div id="aiJobsNote" class="note" style="display:none;margin-top:4px"></div>
@@ -203,6 +203,10 @@
 
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   var rec = null, media = null, stream = null, chunks = [], full = '', listening = false, t0 = 0, iv = null;
+  /* 11/9 社長指示：相手が出てから聞き取り・要約を始める。「✅ 相手が出た」（オートなら出たと判定したとき）で CONN_AT を決める。
+     それまでの聞き取りは preFull に置いておき、押し忘れたまま話して終わったときだけ使う */
+  var CONN_AT = 0, preFull = '';
+  function connMark(){ if (CONN_AT || !listening) return; CONN_AT = Date.now(); preFull = full; full = ''; $('#live').textContent = ''; $('#recLbl').textContent = '録音・聞き取り中（相手が出てから）'; }
 
   function startRecognition(){
     if (!SR) { $('#state').textContent = 'このブラウザでは聞き取りが使えません（録音だけ行います）。Chromeで開いてください。'; return; }
@@ -212,7 +216,7 @@
       for (var i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) fin += e.results[i][0].transcript; else itm += e.results[i][0].transcript;
       }
-      if (fin) { full += fin + '\n'; send({ type: 'heard', text: fin }); }
+      if (fin) { full += fin + '\n'; if (CONN_AT) send({ type: 'heard', text: fin }); }   // 出る前の声は業務ツールの入力欄に入れない
       $('#live').textContent = (full + itm).slice(-2000);
       $('#live').scrollTop = 1e9;
     };
@@ -312,6 +316,7 @@
     media.ondataavailable = function(e){ if (e.data && e.data.size) chunks.push(e.data); };
     media.start(5000);
     try { if (EAR && CLOUD_TR && sysStream && sysStream.getAudioTracks().length) splitStart(micStream, new MediaStream(sysStream.getAudioTracks()), name); } catch(x) { SPLIT = null; }
+    CONN_AT = 0; preFull = ''; full = ''; $('#recLbl').textContent = '呼び出し中（相手が出たら「✅ 相手が出た」）';
     startRecognition();
     t0 = Date.now();
     nextCheck = LONG_SEC;
@@ -373,8 +378,9 @@
       // 11/9 社長指示：つながる前（呼び出し中）の話は入れない。相手が最初に話した時刻から始める（自動の案内・留守電の案内は相手の声として数えない）
       var ann = /お出になりません|留守番電話|電波の届かない|電源が入っていない|おかけになった電話|発信音のあと|お呼びしましたが|ただいま電話に出ることができません/;
       var firstThem = sp.out.filter(function(x){ return x.who === 'them' && !ann.test(x.text); }).sort(function(a, b){ return a.t - b.t; })[0];
-      if (!firstThem) return '';                             // 相手が一度も話していない（つながっていない）→ 文字起こしなし（隣の話を要約しない）
-      sp.out = sp.out.filter(function(x){ return x.t >= firstThem.t - 3 && !(x.who === 'them' && ann.test(x.text)); });
+      if (!firstThem && !sp.connSec) return '';              // 相手が一度も話していない（つながっていない）→ 文字起こしなし（隣の話を要約しない）
+      var from = firstThem ? Math.max(firstThem.t - 3, (sp.connSec || 0) - 1) : sp.connSec - 1;   // 相手の声が録れていなくても、「相手が出た」のあとの自分の声は残す   // 「✅ 相手が出た」より前（呼び出し中）は入れない
+      sp.out = sp.out.filter(function(x){ return x.t >= from && !(x.who === 'them' && ann.test(x.text)); });
       var them = sp.out.filter(function(x){ return x.who === 'them'; });
       var lines = sp.out.filter(function(x){                 // 相手の声がマイクにも入った（スピーカーの日）分は、相手側だけ残す
         return x.who === 'them' || !them.some(function(y){ return Math.abs(y.t - x.t) < 8 && sim(x.text, y.text) > 0.6; });
@@ -507,7 +513,7 @@
         autoVmCheck(function(isVm){
           AUTO.checking = false; if (!AUTO.on) return;
           if (isVm) { autoNote('📼 留守電でした → 切って次へ進みます'); autoNoAnswer(second); return; }
-          autoStop('🗣 相手が出ました。オートを止めました。ここからは話してください（終わったら緑のボタン）');
+          connMark(); autoStop('🗣 相手が出ました。オートを止めました。ここからは話してください（終わったら緑のボタン）');
           send({ type: 'auto_connected', tel: tel, name: name });
         });
         return;
@@ -599,7 +605,9 @@
     try { rec && rec.stop(); } catch(x) {}
     clearInterval(iv);
     $('#stop').disabled = true; $('#stop').textContent = '保存しています…';
-    var who = { tel: tel, name: name }, trLive = full;          // この通話の人と聞き取りを、ここで固定する（このあと次の人に進んでも混ざらない）
+    var who = { tel: tel, name: name }, trLive = CONN_AT ? full : preFull + full;   // 「相手が出た」を押し忘れたときだけ、全部を使う
+    var connSec = CONN_AT && SPLIT ? (CONN_AT - SPLIT.t0) / 1000 : 0;
+    if (SPLIT) SPLIT.connSec = connSec;          // この通話の人と聞き取りを、ここで固定する（このあと次の人に進んでも混ざらない）
     var splitP = SPLIT ? splitStop() : null;                     // 話者別の録音は、マイクを止める前に締める
     media.onstop = async function(){
       [stream, micStream].forEach(function(s){ try { if (s && s !== MIC_KEEP) s.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {} });   // 画面共有（相手の声）は止めずに次の電話でも使う
@@ -712,7 +720,7 @@
       .catch(function(e){ cd.st('⚠ 記録できませんでした：' + e.message); });
   };
   $('#ringNo2').onclick = function(){ $('#no2').click(); };
-  $('#ringYes').onclick = function(){ ringStop(); if (listening) $('#noans').style.display = 'block'; };
+  $('#ringYes').onclick = function(){ connMark(); ringStop(); if (listening) $('#noans').style.display = 'block'; };
 
   /* 出なかったとき：録音を捨てて、この人の電話番号で直接「不在」を記録 → SMSの文面を、この人のカードに出す。
      カードは次の人の電話を始めても消えないので、SMSはあとで送ってもちゃんとこの人に送られる */
