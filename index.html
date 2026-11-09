@@ -493,7 +493,7 @@
     var prep = PREP && PREP.tel === who.tel ? PREP : null, again = SECOND === who.tel; PREP = null; SECOND = '';
     var vmNow = $('#vmLeft').checked;
     var to0 = String(who.tel || '').replace(/[^0-9]/g, ''), sent0 = {}; try { sent0 = JSON.parse(localStorage.getItem('smsSent') || '{}'); } catch(x) {}
-    if (prep && prep.sms && !again && !(sent0[to0] && Date.now() - sent0[to0] < 30 * 60000)) {   // SMSを先に送って、すぐ2回目をかけられるようにする。不在の記録は裏で進める
+    if (prep && prep.sms && !again && (prep.n || 1) <= 1 && !(sent0[to0] && Date.now() - sent0[to0] < 30 * 60000)) {   // 11/9 社長指示：自動で送るのは1通目だけ。2通目からは案を見せて確かめてから   // SMSを先に送って、すぐ2回目をかけられるようにする。不在の記録は裏で進める
       sent0[to0] = Date.now(); try { localStorage.setItem('smsSent', JSON.stringify(sent0)); } catch(x) {}
       openExt('shortcuts://run-shortcut?name=' + encodeURIComponent('ACTR_SMS') + '&input=text&text=' + encodeURIComponent(JSON.stringify({ to: to0, body: prep.sms })));
       var cf = card(who); cf.st('✅ SMSを送りました（不在を記録中）');
@@ -519,10 +519,33 @@
       if (!err && !r.dup) $('#state').innerHTML = '<b style="color:#B26A00">📵 ' + esc(who.name || '') + 'さん：SMSを送ったら、すぐもう一回かけてください（セットの2回目）</b>';
       var go = document.createElement('button'); go.className = 'go'; go.textContent = r.dup ? '✉ 送っていなければ送る' : '✉ SMSを送る';
       cd.el.querySelector('.hd').appendChild(go);
-      cd.bd.innerHTML = '<div style="font-size:12px;color:#5C6C78;margin-bottom:2px">送る文面（直してOK）</div><textarea style="width:100%;min-height:110px"></textarea><div class="note" style="margin-top:2px"></div>';   // 11/5 社長指示：文面は押さなくても最初から出す
+      cd.bd.innerHTML = '<div class="smsAsk" style="font-size:12.5px;color:#5C6C78;margin-bottom:2px">送る文面（直してOK）</div><textarea style="width:100%;min-height:130px"></textarea>'
+        + '<button type="button" class="smsVoice" style="margin-top:3px;padding:6px 10px;font-weight:800">🎤 声で直す（例：「もっと短く」「明日の夕方って入れて」）</button><div class="note" style="margin-top:2px"></div>';   // 11/5 社長指示：文面は押さなくても最初から出す
       if (r.dup) go.style.background = 'var(--muted)';
       var ta = cd.bd.querySelector('textarea');
       ta.value = r.sms || 'ACT-Rの香川です！ご応募ありがとうございます。さっきお電話しました📞 15〜20分ほどお話しできたら、ぴったりのお仕事をご案内できます！この番号に折り返しもらうか「◯時ならOK」だけ返信ください🙏';
+      var ask = cd.bd.querySelector('.smsAsk'), touched = false; ta.addEventListener('input', function(){ touched = true; });
+      if (!r.dup && (r.n || 1) >= 2) {                // 11/9 社長指示：2通目からは、これまでの流れ（折り返しに出られなかった等）に合わせた案を出して確かめてもらう
+        ask.innerHTML = '<b style="color:#B26A00">✨ これまでの流れに合わせた案を作っています…</b>';
+        rpc('不在のSMS案', [who.tel, who.name, ta.value]).then(function(x){
+          if (x && x.ok && !touched) ta.value = x.text;
+          ask.innerHTML = '<b style="color:#B26A00">📝 この内容で送ってもいいですか？</b> 違うところは下の「🎤 声で直す」で言ってください（' + (r.n || 2) + '回目の不在）';
+        }).catch(function(){ ask.textContent = '送る文面（直してOK）'; });
+      }
+      cd.bd.querySelector('.smsVoice').onclick = function(){
+        var vb = this, SRx = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SRx) { alert('このブラウザでは声の入力が使えません'); return; }
+        var r2 = new SRx(); r2.lang = 'ja-JP'; r2.interimResults = false; r2.maxAlternatives = 1;
+        vb.disabled = true; vb.textContent = '🎤 どう直すか話してください…';
+        r2.onresult = function(e){
+          var how = e.results[0][0].transcript; vb.textContent = '✨ 「' + how + '」で直しています…';
+          rpc('SMSを直す', [ta.value, how, who.tel]).then(function(x){ if (x && x.ok) { ta.value = x.text; touched = true; ask.innerHTML = '<b style="color:#B26A00">📝 直しました。この内容で送ってもいいですか？</b>'; } else alert('直せませんでした：' + (x && x.msg || '')); })
+            .catch(function(err){ alert('直せませんでした：' + err.message); })
+            .then(function(){ vb.disabled = false; vb.textContent = '🎤 声で直す（例：「もっと短く」「明日の夕方って入れて」）'; });
+        };
+        r2.onerror = function(){ vb.disabled = false; vb.textContent = '🎤 声で直す（聞き取れませんでした。もう一度）'; };
+        r2.onend = function(){ if (/話してください/.test(vb.textContent)) { vb.disabled = false; vb.textContent = '🎤 声で直す（例：「もっと短く」「明日の夕方って入れて」）'; } };
+        r2.start();
+      };
       go.onclick = function(){
         var to = String(who.tel || '').replace(/[^0-9]/g, '');
         if (!to) { alert('電話番号がありません'); return; }
