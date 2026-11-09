@@ -248,6 +248,8 @@
   $('#viaBadge').style.display = VIA_PHONE ? 'block' : 'none';
   $('#viaPhone').onchange = function(){ VIA_PHONE = this.checked; $('#viaBadge').style.display = VIA_PHONE ? 'block' : 'none'; $('#phoneNote').style.display = VIA_PHONE ? '' : 'none'; try { localStorage.setItem('viaPhone2', VIA_PHONE ? '1' : '0'); } catch(x) {} };
   $('#start').onclick = async function(){
+    // 11/9：発信はいちばん最初に（ボタンを押した操作のうちに）。画面共有やマイクの許可を先に聞くと、Chromeが発信を止めるため
+    if (tel) { if (NODIAL) { NODIAL = false; } else { rpc('発信した', [tel, name]).catch(function(){}); dialTel(tel, name, function(t){ $('#state').textContent = t; }); } }   // 11/9：ツールの「電話する」から来たときは、ツールが発信済み
     EAR = $('#earMode').checked;
     var sysLive = sysAdopt();
     if (EAR && !sysLive) {
@@ -258,7 +260,6 @@
     }
     PREP = null; var pt = tel;                          // 不在のときのSMSを、発信と同時に用意しておく（押したらすぐ送るため）
     if (tel) rpc('不在の準備', [tel, name]).then(function(r){ if (r && r.ok && pt === tel) { r.tel = pt; PREP = r; } }).catch(function(){});
-    if (tel) { if (NODIAL) { NODIAL = false; } else { rpc('発信した', [tel, name]).catch(function(){}); dialTel(tel, name, function(t){ $('#state').textContent = t; }); } }   // 11/9：ツールの「電話する」から来たときは、ツールが発信済み
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });   // 11/9 社長指示：まわりの音を減らす（Chromeの雑音抑制をオン）
       micStream = stream;
