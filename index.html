@@ -248,7 +248,7 @@
   $('#viaPhone').onchange = function(){ VIA_PHONE = this.checked; $('#viaBadge').style.display = VIA_PHONE ? 'block' : 'none'; $('#phoneNote').style.display = VIA_PHONE ? '' : 'none'; try { localStorage.setItem('viaPhone2', VIA_PHONE ? '1' : '0'); } catch(x) {} };
   $('#start').onclick = async function(){
     EAR = $('#earMode').checked;
-    var sysLive = sysStream && sysStream.getAudioTracks().some(function(t){ return t.readyState === 'live'; });
+    var sysLive = sysAdopt();
     if (EAR && !sysLive) {
       try {
         sysStream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'monitor' }, audio: { echoCancellation: false, noiseSuppression: false }, systemAudio: 'include', selfBrowserSurface: 'exclude', monitorTypeSurfaces: 'include', surfaceSwitching: 'exclude' });
@@ -429,7 +429,14 @@
   try { $('#autoHang').checked = localStorage.getItem('AUTO_HANGUP') === '1'; $('#autoHang').onchange = function(){ try { localStorage.setItem('AUTO_HANGUP', this.checked ? '1' : '0'); } catch(x) {} }; } catch(x) {}
   /* 11/9：相手の声（Macから出る音）を録るには、画面共有で「システムの音声」を許可する必要がある。これは自分で押したときしか出せないので、
      電話の前に1回押すボタンを出す。共有できていれば消える（同じウィンドウなら次の電話でもそのまま使う） */
-  function sysLiveNow(){ return !!(sysStream && sysStream.getAudioTracks().some(function(t){ return t.readyState === 'live'; })); }
+  // 11/9：メインのツール画面で「🎧 相手の声の準備」をしてあれば、その共有をそのまま使う（同じサイトなので受け取れる）
+  function sysAdopt(){
+    var live = function(st){ return !!(st && st.getAudioTracks().some(function(t){ return t.readyState === 'live'; })); };
+    if (live(sysStream)) return true;
+    try { var os = window.opener && window.opener.SYS_STREAM; if (live(os)) { sysStream = os; return true; } } catch(x) {}
+    return false;
+  }
+  function sysLiveNow(){ return sysAdopt(); }
   setInterval(function(){ var b = $('#sysPrep'); if (b) b.style.display = $('#earMode').checked && !sysLiveNow() && $('#stop').style.display !== 'block' ? 'block' : 'none'; }, 700);
   $('#sysPrep').onclick = async function(){
     try {
