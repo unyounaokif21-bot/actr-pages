@@ -127,6 +127,7 @@
 (function(){
   var $ = function(s){ return document.querySelector(s); };
   var q = new URLSearchParams(location.hash.slice(1));
+  var NODIAL = q.get('nodial') === '1', AUTOMODE_REQ = q.get('automode') === '1';
   var tel = (q.get('tel') || '').replace(/[^0-9]/g, '');
   var name = q.get('name') || '';
   var origin = q.get('origin') || '';
@@ -257,7 +258,7 @@
     }
     PREP = null; var pt = tel;                          // 不在のときのSMSを、発信と同時に用意しておく（押したらすぐ送るため）
     if (tel) rpc('不在の準備', [tel, name]).then(function(r){ if (r && r.ok && pt === tel) { r.tel = pt; PREP = r; } }).catch(function(){});
-    if (tel) { rpc('発信した', [tel, name]).catch(function(){}); dialTel(tel, name, function(t){ $('#state').textContent = t; }); }
+    if (tel) { if (NODIAL) { NODIAL = false; } else { rpc('発信した', [tel, name]).catch(function(){}); dialTel(tel, name, function(t){ $('#state').textContent = t; }); } }   // 11/9：ツールの「電話する」から来たときは、ツールが発信済み
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });   // 11/9 社長指示：まわりの音を減らす（Chromeの雑音抑制をオン）
       micStream = stream;
@@ -455,7 +456,7 @@
   function autoNote(t){ var n = $('#autoNote'); n.style.display = t ? 'block' : 'none'; n.textContent = t || ''; }
   function autoStop(why){
     AUTO.on = false; clearInterval(AUTO.timer); AUTO.timer = null; try { AUTO.ctx && AUTO.ctx.close(); } catch(x) {} AUTO.ctx = null;
-    $('#autoBtn').textContent = '▶ オートモード（自動でどんどんかける）'; $('#autoBtn').style.background = '#4A148C'; autoNote(why || '');
+    $('#autoBtn').textContent = '▶ オートモード（自動でどんどんかける）'; $('#autoBtn').style.background = '#4A148C'; autoNote(why || ''); send({ type: 'auto_off' });
     try { localStorage.setItem('AUTO_ON', '0'); } catch(x) {}
   }
   function autoHours(){ var h = new Date().getHours(); return h >= 9 && h < 20; }
@@ -517,6 +518,14 @@
   // 発信が始まるたびに（オート中なら）見張りを始める
   setInterval(function(){ var inCall = $('#stop').style.display === 'block'; if (AUTO.on && inCall && !AUTO.timer && autoHours()) autoStep(); if (AUTO.on && !autoHours()) autoStop('🌙 20時になったのでオートを止めました'); }, 400);
   (function(){ var st = $('#start'); var orig = st.onclick; st.addEventListener('click', function(){ if (AUTO.on) { clearInterval(AUTO.timer); AUTO.timer = null; } }); })();
+
+  /* 11/9：ツールの大きいオートボタンから来たとき（automode=1）はオートを入れる。ツールの「止める」も受け取る */
+  function autoOnFromTool(){ if (AUTO.on) return; AUTO.on = true; $('#autoBtn').textContent = '■ オートを止める'; $('#autoBtn').style.background = '#C62828'; }
+  window.addEventListener('message', function(e){
+    if (!okOrigin || e.origin !== okOrigin) return;
+    var m = e.data || {}; if (m.type === 'autoStop') autoStop('■ ツールからオートを止めました');
+  });
+  if (AUTOMODE_REQ) setTimeout(autoOnFromTool, 50);
 
   /* 長すぎる録音の確認：40分たったら「まだ通話中？」を出し、60秒反応がなければ自動で止める */
   var LONG_SEC = 40 * 60, nextCheck = LONG_SEC, longOpen = false, longIv = null;
@@ -751,6 +760,8 @@
     foldOld(); stepShow(q2.get('step'));
     $('#stop').disabled = false; $('#stop').textContent = '■ 電話を切ったら押す（録音を保存して閉じる）';
     $('#start').style.display = 'block';
+    NODIAL = q2.get('nodial') === '1'; AUTOMODE_REQ = q2.get('automode') === '1';
+    if (AUTOMODE_REQ && typeof autoOnFromTool === 'function') autoOnFromTool();
     if (q2.get('auto') === '1') setTimeout(function(){ $('#start').click(); }, 100);
   });
   window.addEventListener('beforeunload', function(e){ if (listening && Date.now() > EXT_UNTIL) { e.preventDefault(); e.returnValue = ''; } });
