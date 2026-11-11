@@ -726,7 +726,7 @@
       if (s > 600) ringStop();
     }, 1000);
   }
-  $('#ringNo').onclick = function(){ ringStop(); $('#noans').click(); };
+  $('#ringNo').onclick = function(){ ringStop(); try { hangup(); } catch(x) {} $('#noans').click(); };   // 11/11 社長指示：押したら電話（Mac・iPhone）も切る
   /* 11/5 社長指示：SMSのあとの2回目も出なかった。録音は捨てて、2回目の記録は裏で。業務ツールはすぐ次の人へ */
   $('#no2').onclick = function(){
     ringStop();
@@ -742,7 +742,7 @@
     rpc('二回目終わり', [who.tel, who.name]).then(function(r){ cd.st('✅ 2回目も不在で記録しました（今日' + (r && r.set || 1) + 'セット目おわり）'); cd.done(); })
       .catch(function(e){ cd.st('⚠ 記録できませんでした：' + e.message); });
   };
-  $('#ringNo2').onclick = function(){ $('#no2').click(); };
+  $('#ringNo2').onclick = function(){ try { hangup(); } catch(x) {} $('#no2').click(); };
   $('#ringYes').onclick = function(){ connMark(); ringStop(); if (listening) $('#noans').style.display = 'block'; };
 
   /* 出なかったとき：録音を捨てて、この人の電話番号で直接「不在」を記録 → SMSの文面を、この人のカードに出す。
