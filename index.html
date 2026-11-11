@@ -59,6 +59,11 @@
   <!-- 11/9 社長指示：ボタン1個で進む（①電話 → 出なかったら ②切ってSMS→すぐ2回目 → ③2回目も出なかったら次の人へ）。話せたら緑のボタン -->
   <button id="one" type="button" style="font-size:20px;padding:16px;font-weight:900;background:#0E6E66;color:#fff;border:0;border-radius:10px;width:100%">① 📞 電話する</button>
   <button id="oneTalk" type="button" style="display:none;margin-top:6px;font-size:15px;padding:11px;font-weight:800;background:#2E7D32;color:#fff;border:0;border-radius:10px;width:100%">✅ 話せた → 電話が終わったら押す（保存）</button>
+  <!-- 11/11 社長指示：通話中にシンプルに「電話を切る」と、「SMSを送らずに切って、すぐ2回目」 -->
+  <div id="callBtns" style="display:none;margin-top:6px;gap:6px">
+    <button id="hangOnly" type="button" style="flex:1;font-size:15px;padding:11px;font-weight:800;background:#455A64;color:#fff;border:0;border-radius:10px">📴 電話を切る</button>
+    <button id="again2NoSms" type="button" style="flex:1;font-size:15px;padding:11px;font-weight:800;background:#6A1B9A;color:#fff;border:0;border-radius:10px">🔁 SMSなしで切って、すぐ2回目</button>
+  </div>
   <button id="sysPrep" type="button" style="display:none;margin-top:6px;font-size:15px;padding:11px;font-weight:800;background:#1565C0;color:#fff;border:0;border-radius:10px;width:100%">🎧 相手の声を録る準備（最初に1回だけ押す）</button>
   <button id="autoBtn" type="button" style="margin-top:6px;font-size:15px;padding:10px;font-weight:900;background:#4A148C;color:#fff;border:0;border-radius:10px;width:100%">▶ オートモード（自動でどんどんかける）</button>
   <div id="autoNote" style="display:none;font-size:12.5px;font-weight:700;color:#4A148C;margin-top:3px"></div>
@@ -418,6 +423,21 @@
     else { b.textContent = '② 📵 出なかった → SMS → すぐ2回目'; b.style.background = '#C62828'; n.textContent = '出たら緑のボタン（話し終わったら押す）。出なければ赤を押すと、不在を記録してSMSを送り、すぐ2回目をかけます'; }
   }
   setInterval(oneDraw, 500);
+  setInterval(function(){ var cb = document.getElementById('callBtns'); if (cb) cb.style.display = $('#stop').style.display === 'block' ? 'flex' : 'none'; }, 400);
+  // 📴 電話を切る：電話を切って、ここまでの録音をいつもどおり保存する（話せたときと同じ）
+  $('#hangOnly').onclick = function(){ hangup(); $('#stop').click(); };
+  // 🔁 SMSなしで切って、すぐ2回目：不在だけ記録して（SMSは送らない）、10秒ほどで2回目をかける
+  $('#again2NoSms').onclick = function(){
+    var who = { tel: tel, name: name }; hangup(); ringStop(); listening = false;
+    try { rec && rec.stop(); } catch(x) {} clearInterval(iv);
+    try { if (media && media.state !== 'inactive') { media.onstop = null; media.stop(); } } catch(x) {}
+    try { if (stream && stream !== MIC_KEEP) stream.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {}
+    resetMain();
+    rpc('架電不在', [who.tel, who.name, false]).catch(function(){});
+    SECOND = who.tel; stepShow('📞 いま：セットの2回目（SMSなし）');
+    $('#state').textContent = '🔁 SMSは送らずに、10秒ほどで2回目をかけます…';
+    setTimeout(function(){ if (tel === who.tel && $('#stop').style.display !== 'block') $('#start').click(); }, 2500);   // 発信は、切ってから8秒待ってからかかる
+  };
   $('#one').onclick = function(){
     var inCall = $('#stop').style.display === 'block';
     if (!inCall) { $('#start').click(); return; }
@@ -840,7 +860,7 @@
   // 11/11 社長指示：聞き取りと業務ツールの名前を必ずそろえる。通話中に業務ツールが次の人へ進んだら、今の通話が終わった時点で切り替える
   var PEND_HASH = false;
   // 11/11 社長指示：直したのに古い画面のままにならないように。1分ごとに新しい版が出ていないか見て、電話していないときに自動で読み込み直す
-  var PAGE_VER = '20261111-1515';
+  var PAGE_VER = '20261111-1840';
   setInterval(function(){
     if (listening || (typeof AUTO !== 'undefined' && AUTO.on) || document.querySelector('#pend .pc textarea:focus')) return;
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
