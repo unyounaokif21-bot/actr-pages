@@ -836,8 +836,21 @@
       send({ type: 'noanswer', recorded: true, tel: who.tel, name: who.name, n: r && r.n || 1, second: !!(r && r.second), msg: r && r.msg || '' });
     }).catch(function(e){ show({}, e.message); });
   };
+  // 11/11 社長指示：聞き取りと業務ツールの名前を必ずそろえる。通話中に業務ツールが次の人へ進んだら、今の通話が終わった時点で切り替える
+  var PEND_HASH = false;
+  function whoWarn(t){ var b = document.getElementById('whoWarn'); if (!b) { b = document.createElement('div'); b.id = 'whoWarn'; b.style.cssText = 'margin:6px 0;padding:6px 10px;border-radius:6px;background:#C62828;color:#fff;font-weight:800;font-size:13px;display:none'; var wh = document.getElementById('who'); wh.parentNode.insertBefore(b, wh.nextSibling); } b.style.display = t ? 'block' : 'none'; b.textContent = t || ''; }
+  setInterval(function(){ if (PEND_HASH && !listening) { PEND_HASH = false; window.dispatchEvent(new HashChangeEvent('hashchange')); } }, 500);
+  window.addEventListener('message', function(e){
+    if (!okOrigin || e.origin !== okOrigin) return;
+    var m = e.data || {}; if (m.type !== 'who') return;
+    var t2 = String(m.tel || '').replace(/[^0-9]/g, ''); if (!t2) return;
+    if (t2 === tel) { whoWarn(''); if (m.name && m.name !== name && !listening) { name = m.name; $('#who').innerHTML = esc(name) + '<small>' + esc(tel.replace(/^(\d{3})(\d{4})(\d+)$/, '$1-$2-$3')) + '</small>'; } return; }
+    if (listening) { whoWarn('⚠ 業務ツールは ' + (m.name || t2) + 'さんを表示中です。この録音は ' + (name || tel) + 'さんの分として保存します'); return; }
+    tel = t2; name = m.name || ''; whoWarn('');
+    $('#who').innerHTML = esc(name || '（氏名なし）') + '<small>' + esc(tel.replace(/^(\d{3})(\d{4})(\d+)$/, '$1-$2-$3')) + '</small>';
+  });
   window.addEventListener('hashchange', function(){
-    if (listening) return;
+    if (listening) { PEND_HASH = true; return; }
     var q2 = new URLSearchParams(location.hash.slice(1));
     tel = (q2.get('tel') || '').replace(/[^0-9]/g, ''); name = q2.get('name') || '';
     $('#who').innerHTML = esc(name || '（氏名なし）') + '<small>' + esc(tel ? tel.replace(/^(\d{3})(\d{4})(\d+)$/, '$1-$2-$3') : '電話番号なし') + '</small>';
