@@ -557,7 +557,7 @@
               tries++; if (!AUTO.on || tel !== t1) { clearInterval(w); return; }
               var a = document.getElementById('again');
               if (a) { clearInterval(w); setTimeout(function(){ if (AUTO.on && tel === t1) document.getElementById('again').click(); }, 800); }
-              else if (tries > 25) { clearInterval(w); SECOND = t1; stepShow('📞 いま：セットの2回目（SMSは確認待ち）'); $('#start').click(); }   // 2通目以降のSMSは確認が要るので、送らずに2回目へ（SMSは下のカードに残る）
+              else if (tries > 70) { clearInterval(w); SECOND = t1; stepShow('📞 いま：セットの2回目（SMSは送れなかったので下のカードに残っています）'); $('#start').click(); }   // 11/11：2通目以降はAIの文ができるのを待って送るので、20秒ほど待つ   // 2通目以降のSMSは確認が要るので、送らずに2回目へ（SMSは下のカードに残る）
             }, 300);
           }
         }, 1500);
@@ -792,10 +792,18 @@
       var ask = cd.bd.querySelector('.smsAsk'), touched = false; ta.addEventListener('input', function(){ touched = true; });
       if (!r.dup && (r.n || 1) >= 2) {                // 11/9 社長指示：2通目からは、これまでの流れ（折り返しに出られなかった等）に合わせた案を出して確かめてもらう
         ask.innerHTML = '<b style="color:#B26A00">✨ これまでの流れに合わせた案を作っています…</b>';
+        var autoNow = typeof AUTO !== 'undefined' && AUTO.on;   // 11/11 社長指示：オート中は2通目以降も確認なしで送る（送った文はカードと記録に残す）
+        var autoSend = function(){
+          if (!autoNow) return;
+          go.click();
+          ask.innerHTML = '<b style="color:#2E7D32">🤖 オート中なので、この文を自動で送りました（' + (r.n || 2) + '回目の不在）</b>';
+          rpc('オートSMS記録', [who.tel, who.name, ta.value]).catch(function(){});
+        };
         rpc('不在のSMS案', [who.tel, who.name, ta.value]).then(function(x){
           if (x && x.ok && !touched) ta.value = x.text;
           ask.innerHTML = '<b style="color:#B26A00">📝 この内容で送ってもいいですか？</b> 違うところは下の「🎤 声で直す」で言ってください（' + (r.n || 2) + '回目の不在）';
-        }).catch(function(){ ask.textContent = '送る文面（直してOK）'; });
+          autoSend();
+        }).catch(function(){ ask.textContent = '送る文面（直してOK）'; autoSend(); });
       }
       cd.bd.querySelector('.smsVoice').onclick = function(){
         var vb = this, SRx = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SRx) { alert('このブラウザでは声の入力が使えません'); return; }
@@ -815,7 +823,7 @@
         var to = String(who.tel || '').replace(/[^0-9]/g, '');
         if (!to) { alert('電話番号がありません'); return; }
         var sent = {}; try { sent = JSON.parse(localStorage.getItem('smsSent') || '{}'); } catch(x) {}
-        if (sent[to] && Date.now() - sent[to] < 30 * 60000 && !confirm(Math.round((Date.now() - sent[to]) / 60000) + '分前にこの人へSMSを送っています。もう一度送りますか？')) return;
+        if (sent[to] && Date.now() - sent[to] < 30 * 60000 && (typeof AUTO !== 'undefined' && AUTO.on ? true : !confirm(Math.round((Date.now() - sent[to]) / 60000) + '分前にこの人へSMSを送っています。もう一度送りますか？'))) return;
         sent[to] = Date.now(); try { localStorage.setItem('smsSent', JSON.stringify(sent)); } catch(x) {}
         openExt('shortcuts://run-shortcut?name=' + encodeURIComponent('ACTR_SMS') + '&input=text&text=' + encodeURIComponent(JSON.stringify({ to: to, body: ta.value })));
         this.disabled = true; this.textContent = '✅ 送りました';
