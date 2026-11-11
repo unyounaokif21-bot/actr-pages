@@ -838,6 +838,8 @@
   };
   // 11/11 社長指示：聞き取りと業務ツールの名前を必ずそろえる。通話中に業務ツールが次の人へ進んだら、今の通話が終わった時点で切り替える
   var PEND_HASH = false;
+  // 業務ツールを読み込み直しても名前がそろうように、こちらから2秒ごとに「今は誰？」と聞く（返事は下の who で受ける）
+  setInterval(function(){ try { if (okOrigin && window.opener && !window.opener.closed) window.opener.postMessage({ type: 'whoAsk', tel: tel }, okOrigin); } catch(x) {} }, 2000);
   function whoWarn(t){ var b = document.getElementById('whoWarn'); if (!b) { b = document.createElement('div'); b.id = 'whoWarn'; b.style.cssText = 'margin:6px 0;padding:6px 10px;border-radius:6px;background:#C62828;color:#fff;font-weight:800;font-size:13px;display:none'; var wh = document.getElementById('who'); wh.parentNode.insertBefore(b, wh.nextSibling); } b.style.display = t ? 'block' : 'none'; b.textContent = t || ''; }
   setInterval(function(){ if (PEND_HASH && !listening) { PEND_HASH = false; window.dispatchEvent(new HashChangeEvent('hashchange')); } }, 500);
   window.addEventListener('message', function(e){
