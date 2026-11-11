@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="業務ツール">
+<meta name="apple-mobile-web-app-title" content="中川さん">
 <link rel="icon" type="image/png" sizes="32x32" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-32.png"><link rel="icon" type="image/png" sizes="512x512" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-512.png"><link rel="apple-touch-icon" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-180.png">
-<title>業務ツール</title>
+<title>中川さん</title>
 <style>html,body{margin:0;background:#E9EEF1;font:15px -apple-system,"Hiragino Sans",sans-serif}#msg{padding:24px;line-height:1.7}</style>
 </head>
 <body>
-<div id="msg">業務ツールを読み込んでいます…</div>
+<div id="msg">中川さんを読み込んでいます…</div>
 <!-- 業務ツール（Google Apps Script）の画面を、Googleの帯を出さずにこのページで表示する。
      画面のHTMLはツールから毎回取ってくる（このファイルには中身を書かない）。ツールのURLは「#u=…」で受け取ってこの端末に保存する。
      画面からの google.script.run は、ツールへの POST（doPost の rpc）に置き換える -->
@@ -43,7 +43,7 @@
   // 画面のHTMLと同時に「電話の順番」も取りに行く（画面が出たらすぐ1人目を入れるため）
   function startQP(){ try { window.__QP = fetch(u, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ rpc: '架電キュー', args: [[]] }) }).then(function(r){ return r.json(); }); window.__QP.catch(function(){}); } catch (e) {} }
   function render(html){
-    var head = '<link rel="icon" type="image/png" sizes="32x32" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-32.png"><link rel="icon" type="image/png" sizes="512x512" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-512.png"><link rel="apple-touch-icon" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-180.png"><title>業務ツール</title><script>(' + shim.toString() + ')(' + JSON.stringify(u) + ');<\/script>';
+    var head = '<link rel="icon" type="image/png" sizes="32x32" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-32.png"><link rel="icon" type="image/png" sizes="512x512" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-512.png"><link rel="apple-touch-icon" href="https://unyounaokif21-bot.github.io/actr-pages/app/icon-180.png"><title>中川さん</title><script>(' + shim.toString() + ')(' + JSON.stringify(u) + ');<\/script>';
     document.open(); startQP(); document.write(html.replace(/<head>/i, '<head>' + head)); document.close();   // document.open は通信を止めるので、通信はこのあとで始める
   }
   // 画面のHTMLはこの端末に保存しておいて、すぐ出す。裏で最新を取りに行き、新しくなっていたら保存して、更新の案内を出す
