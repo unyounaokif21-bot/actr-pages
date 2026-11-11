@@ -839,6 +839,14 @@
   };
   // 11/11 社長指示：聞き取りと業務ツールの名前を必ずそろえる。通話中に業務ツールが次の人へ進んだら、今の通話が終わった時点で切り替える
   var PEND_HASH = false;
+  // 11/11 社長指示：直したのに古い画面のままにならないように。1分ごとに新しい版が出ていないか見て、電話していないときに自動で読み込み直す
+  var PAGE_VER = '20261111-1515';
+  setInterval(function(){
+    if (listening || (typeof AUTO !== 'undefined' && AUTO.on) || document.querySelector('#pend .pc textarea:focus')) return;
+    fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
+      var m = t.match(/PAGE_VER = '([^']+)'/); if (m && m[1] !== PAGE_VER && !listening) location.reload();
+    }).catch(function(){});
+  }, 60000);
   // 業務ツールを読み込み直しても名前がそろうように、こちらから2秒ごとに「今は誰？」と聞く（返事は下の who で受ける）
   setInterval(function(){ try { if (okOrigin && window.opener && !window.opener.closed) window.opener.postMessage({ type: 'whoAsk', tel: tel }, okOrigin); } catch(x) {} }, 2000);
   function whoWarn(t){ var b = document.getElementById('whoWarn'); if (!b) { b = document.createElement('div'); b.id = 'whoWarn'; b.style.cssText = 'margin:6px 0;padding:6px 10px;border-radius:6px;background:#C62828;color:#fff;font-weight:800;font-size:13px;display:none'; var wh = document.getElementById('who'); wh.parentNode.insertBefore(b, wh.nextSibling); } b.style.display = t ? 'block' : 'none'; b.textContent = t || ''; }
