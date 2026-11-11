@@ -63,6 +63,18 @@
   <button id="autoBtn" type="button" style="margin-top:6px;font-size:15px;padding:10px;font-weight:900;background:#4A148C;color:#fff;border:0;border-radius:10px;width:100%">▶ オートモード（自動でどんどんかける）</button>
   <div id="autoNote" style="display:none;font-size:12.5px;font-weight:700;color:#4A148C;margin-top:3px"></div>
   <div id="oneNote" style="font-size:12.5px;color:#5C6C78;margin:4px 0 8px"></div>
+  <!-- 11/11 社長指示：「出なかった → すぐSMS」は確認のカードより上に出す -->
+  <div id="ringBox">
+    <b>📞 呼び出し中… <span id="ringSec">0</span>秒</b>
+    <div style="font-size:13px;margin-top:4px" id="ringMsg">相手が出たら、このまま話してください（録音は始まっています）。<br>このページからは「相手が出たか」は見えません。<b>出ないときは下の「出なかった」</b>を押してください。</div>
+    <details id="vmBox" style="margin-top:6px;font-size:13px"><summary style="cursor:pointer;font-weight:700">📼 留守電になったら（読むだけ）</summary>
+      <div id="vmText" style="margin-top:4px;padding:6px 8px;background:#F3F8FF;border-left:4px solid #1565C0;line-height:1.6"></div>
+      <label style="display:block;margin-top:4px"><input type="checkbox" id="vmLeft"> 留守電に残した（記録に残します）</label>
+    </details>
+    <button id="ringNo" style="background:#E8A33D;color:#fff">📵 出なかった → すぐSMS（記録は自動）</button>
+    <button id="ringNo2" style="background:#B26A00;color:#fff;margin-top:6px">📵 2回目も出なかった → 記録して次の人へ</button>
+    <button id="ringYes" style="background:var(--teal);color:#fff">✅ 相手が出た（このまま録音を続ける）</button>
+  </div>
   <div id="oneCheck"></div>
   <button id="start">📞 発信して記録開始</button>
   <div id="viaBadge" style="display:none;margin-top:6px;font-size:12.5px;font-weight:800;color:#1565C0">📱 iPhoneで発信する設定になっています</div>
@@ -83,17 +95,6 @@
     <textarea id="smsText"></textarea>
     <button id="smsSend">✉ このSMSを送る</button>
     <div class="note" id="smsNote"></div>
-  </div>
-  <div id="ringBox">
-    <b>📞 呼び出し中… <span id="ringSec">0</span>秒</b>
-    <div style="font-size:13px;margin-top:4px" id="ringMsg">相手が出たら、このまま話してください（録音は始まっています）。<br>このページからは「相手が出たか」は見えません。<b>出ないときは下の「出なかった」</b>を押してください。</div>
-    <details id="vmBox" style="margin-top:6px;font-size:13px"><summary style="cursor:pointer;font-weight:700">📼 留守電になったら（読むだけ）</summary>
-      <div id="vmText" style="margin-top:4px;padding:6px 8px;background:#F3F8FF;border-left:4px solid #1565C0;line-height:1.6"></div>
-      <label style="display:block;margin-top:4px"><input type="checkbox" id="vmLeft"> 留守電に残した（記録に残します）</label>
-    </details>
-    <button id="ringNo" style="background:#E8A33D;color:#fff">📵 出なかった → すぐSMS（記録は自動）</button>
-    <button id="ringNo2" style="background:#B26A00;color:#fff;margin-top:6px">📵 2回目も出なかった → 記録して次の人へ</button>
-    <button id="ringYes" style="background:var(--teal);color:#fff">✅ 相手が出た（このまま録音を続ける）</button>
   </div>
   <div id="rec"><i></i><span id="clock">00:00</span> <span id="recLbl">呼び出し中（相手が出たら「✅ 相手が出た」）</span></div>
   <div id="sysMeter" style="display:none;margin-top:6px;font-size:13px;font-weight:700"></div>
