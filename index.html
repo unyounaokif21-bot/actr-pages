@@ -55,13 +55,13 @@
   <h1>通話の録音・聞き取り</h1>
   <div class="who" id="who"></div>
   <div id="step" style="display:none;margin:4px 0 8px;padding:7px 10px;background:#FFF3E0;color:#5C3A00;border-left:4px solid #E8A33D;font-weight:800;font-size:14px;border-radius:3px"></div>
-  <style>#start, #stop, #noans, #no2 { display: none !important; }</style><!-- 11/9：ボタンはワンボタンに1つにまとめた（元のボタンは中で使うので残して隠す） -->
+  <style>#start, #stop, #noans, #no2, #ringNo, #ringNo2, #ringYes, #again2NoSms { display: none !important; }</style><!-- 11/9：ボタンはワンボタンに1つにまとめた（元のボタンは中で使うので残して隠す） -->
   <!-- 11/9 社長指示：ボタン1個で進む（①電話 → 出なかったら ②切ってSMS→すぐ2回目 → ③2回目も出なかったら次の人へ）。話せたら緑のボタン -->
   <button id="one" type="button" style="font-size:20px;padding:16px;font-weight:900;background:#0E6E66;color:#fff;border:0;border-radius:10px;width:100%">① 📞 電話する</button>
   <button id="oneTalk" type="button" style="display:none;margin-top:6px;font-size:15px;padding:11px;font-weight:800;background:#2E7D32;color:#fff;border:0;border-radius:10px;width:100%">✅ 話せた → 電話が終わったら押す（保存）</button>
   <!-- 11/11 社長指示：通話中にシンプルに「電話を切る」と、「SMSを送らずに切って、すぐ2回目」 -->
   <div id="callBtns" style="display:none;margin-top:6px;gap:6px">
-    <button id="hangOnly" type="button" style="flex:1;font-size:15px;padding:11px;font-weight:800;background:#455A64;color:#fff;border:0;border-radius:10px">📴 電話を切る</button>
+    <button id="hangOnly" type="button" style="flex:1;font-size:15px;padding:11px;font-weight:800;background:#455A64;color:#fff;border:0;border-radius:10px">📴 切るだけ（録音は保存）</button>
     <button id="again2NoSms" type="button" style="flex:1;font-size:15px;padding:11px;font-weight:800;background:#6A1B9A;color:#fff;border:0;border-radius:10px">🔁 SMSなしで切って、すぐ2回目</button>
   </div>
   <button id="sysPrep" type="button" style="display:none;margin-top:6px;font-size:15px;padding:11px;font-weight:800;background:#1565C0;color:#fff;border:0;border-radius:10px;width:100%">🎧 相手の声を録る準備（最初に1回だけ押す）</button>
@@ -71,7 +71,7 @@
   <!-- 11/11 社長指示：「出なかった → すぐSMS」は確認のカードより上に出す -->
   <div id="ringBox">
     <b>📞 呼び出し中… <span id="ringSec">0</span>秒</b>
-    <div style="font-size:13px;margin-top:4px" id="ringMsg">相手が出たら、このまま話してください（録音は始まっています）。<br>このページからは「相手が出たか」は見えません。<b>出ないときは下の「出なかった」</b>を押してください。</div>
+    <div style="font-size:13px;margin-top:4px" id="ringMsg">相手が出たら、このまま話してください（録音は始まっています）。<br>出ないときは上の赤い「② 📵 出なかった」を押してください（切って、すぐ2回目をかけます）。</div>
     <details id="vmBox" style="margin-top:6px;font-size:13px"><summary style="cursor:pointer;font-weight:700">📼 留守電になったら（読むだけ）</summary>
       <div id="vmText" style="margin-top:4px;padding:6px 8px;background:#F3F8FF;border-left:4px solid #1565C0;line-height:1.6"></div>
       <label style="display:block;margin-top:4px"><input type="checkbox" id="vmLeft"> 留守電に残した（記録に残します）</label>
@@ -417,12 +417,23 @@
     var inCall = $('#stop').style.display === 'block', second = SECOND === tel;
     if (!tel) { b.textContent = '業務ツールで人を選んでください'; b.disabled = true; t.style.display = 'none'; return; }
     b.disabled = false;
+    if (!inCall && typeof NOANS_BUSY !== 'undefined' && NOANS_BUSY && Date.now() - NOANS_BUSY < 60000) { b.textContent = '⏳ 不在を記録中…このあと自動で2回目をかけます'; b.disabled = true; b.style.background = '#78909C'; t.style.display = 'none'; return; }
     if (!inCall) { b.textContent = second ? '② 📞 2回目をかける' : '① 📞 電話する'; b.style.background = '#0E6E66'; t.style.display = 'none'; n.textContent = ''; return; }
     t.style.display = 'block';
     if (second) { b.textContent = '③ 📵 2回目も出なかった → 次の人へ'; b.style.background = '#B26A00'; n.textContent = '出たら緑のボタン（話し終わったら押す）。出なければオレンジを押すと、記録して業務ツールが次の人へ進みます'; }
-    else { b.textContent = '② 📵 出なかった → SMS → すぐ2回目'; b.style.background = '#C62828'; n.textContent = '出たら緑のボタン（話し終わったら押す）。出なければ赤を押すと、不在を記録してSMSを送り、すぐ2回目をかけます'; }
+    else { b.textContent = '② 📵 出なかった → 切って、すぐ2回目'; b.style.background = '#C62828'; n.textContent = '出たら緑のボタン（話し終わったら押す）。出なければ赤：切って不在を記録 → 今日まだ連絡していなければSMS（公式LINEの人はLINE）→ 10秒ほどで2回目'; }
   }
   setInterval(oneDraw, 500);
+  /* 11/12 監査：「相手が出た」ボタンを隠したので、手動の電話は相手の声で自動で判定する（オートと同じ見張り）。
+     出た後だけ業務ツールへ聞き取りを送る。留守電の声でも出た扱いになるが、そのあと「出なかった」を押せば記録は残らない */
+  var MAN = { t: 0, v: 0, on: false };
+  setInterval(function(){
+    var inCall = $('#stop').style.display === 'block';
+    if (!inCall || CONN_AT || (typeof AUTO !== 'undefined' && AUTO.on)) { MAN.on = false; return; }
+    if (!MAN.on) { MAN.on = true; MAN.t = Date.now(); MAN.v = 0; try { autoListen(); } catch(x) {} }
+    try { if (autoVoiced()) MAN.v += 200; } catch(x) {}
+    if (MAN.v >= 1500) { try { connMark(); } catch(x) {} MAN.on = false; }
+  }, 200);
   setInterval(function(){ var cb = document.getElementById('callBtns'); if (cb) cb.style.display = $('#stop').style.display === 'block' ? 'flex' : 'none'; }, 400);
   // 📴 電話を切る：電話を切って、ここまでの録音をいつもどおり保存する（話せたときと同じ）
   $('#hangOnly').onclick = function(){ hangup(); $('#stop').click(); };
@@ -439,18 +450,12 @@
     setTimeout(function(){ if (tel === who.tel && $('#stop').style.display !== 'block') $('#start').click(); }, 2500);   // 発信は、切ってから8秒待ってからかかる
   };
   $('#one').onclick = function(){
+    if (typeof NOANS_BUSY !== 'undefined' && NOANS_BUSY && Date.now() - NOANS_BUSY < 60000) return;
     var inCall = $('#stop').style.display === 'block';
     if (!inCall) { $('#start').click(); return; }
     hangup();
-    if (SECOND === tel) { var who = { tel: tel, name: name }; $('#no2').click(); oneCheck(who); return; }
-    var t0 = tel; $('#noans').click();
-    if (!ONE_AUTO2) return;
-    var tries = 0, w = setInterval(function(){                 // 1通目のSMSを自動で送ったら（「もう一回かける」が出たら）、すぐ2回目をかける
-      tries++; var a = document.getElementById('again');
-      if (tel !== t0) { clearInterval(w); return; }
-      if (tries > 20 && !a) { clearInterval(w); SECOND = t0; stepShow('📞 いま：セットの2回目（SMSは下のカードで確認して送る）'); return; }   // 11/9：2通目以降のSMSは確認が要るので、ボタンを「② 2回目をかける」にして待つ
-      if (a) { clearInterval(w); setTimeout(function(){ if (tel === t0 && document.getElementById('again')) document.getElementById('again').click(); }, 1200); }
-    }, 300);
+    if (SECOND === tel) { $('#no2').click(); return; }
+    $('#noans').click();
   };
   $('#oneTalk').onclick = function(){ var who = { tel: tel, name: name }; hangup(); $('#stop').click(); setTimeout(function(){ oneCheck(who, true); }, 25000); };
   /* 前の人の登録内容を見せる。OK で閉じる。違っていたら声で直す（進捗メモに「訂正」を足す） */
@@ -573,13 +578,7 @@
           if (!AUTO.on) return;
           if (second) { var who = { tel: tel, name: name }; $('#no2').click(); send({ type: 'auto_next', tel: who.tel }); autoNote('🤖 2回目も不在 → 次の人へ…'); }
           else {
-            var t1 = tel; $('#noans').click(); autoNote('🤖 不在 → SMS → 2回目をかけます…');
-            var tries = 0, w = setInterval(function(){
-              tries++; if (!AUTO.on || tel !== t1) { clearInterval(w); return; }
-              var a = document.getElementById('again');
-              if (a) { clearInterval(w); setTimeout(function(){ if (AUTO.on && tel === t1) document.getElementById('again').click(); }, 800); }
-              else if (tries > 70) { clearInterval(w); SECOND = t1; stepShow('📞 いま：セットの2回目（SMSは送れなかったので下のカードに残っています）'); $('#start').click(); }   // 11/11：2通目以降はAIの文ができるのを待って送るので、20秒ほど待つ   // 2通目以降のSMSは確認が要るので、送らずに2回目へ（SMSは下のカードに残る）
-            }, 300);
+            $('#noans').click(); autoNote('🤖 不在 → 記録（今日1回目ならSMS） → 2回目をかけます…');
           }
         }, 1500);
   }
@@ -738,10 +737,10 @@
       + (again ? '先ほどもお電話いたしました、' : '') + 'ご応募いただいたインディードの件でご連絡いたしました。'
       + 'このあとショートメッセージもお送りしますので、ご都合のよいお時間をご返信いただくか、この番号に折り返しいただけますと幸いです。'
       + 'それでは失礼いたします。';
-    $('#ringMsg').innerHTML = '相手が出たら、このまま話してください（録音は始まっています）。<br>このページからは「相手が出たか」は見えません。<b>出ないときは下の「出なかった」</b>を押してください。';
+    $('#ringMsg').innerHTML = '相手が出たら、このまま話してください（録音は始まっています）。<br>出ないときは上の赤い「② 📵 出なかった」を押してください（切って、すぐ2回目をかけます）。';
     ringIv = setInterval(function(){
       var s = Math.floor((Date.now() - t1) / 1000); $('#ringSec').textContent = s;
-      if (s === 30) $('#ringMsg').innerHTML = '<b style="color:#C62828">30秒たちました。呼び出し音が鳴っていない・出ないなら「出なかった」を押してください。</b><br>電話アプリが「発信中」のまま無音なら、iPhoneにつながっていない可能性があります（iPhoneのロック解除・同じWi-Fi・Bluetoothを確認）。';
+      if (s === 30) $('#ringMsg').innerHTML = '<b style="color:#C62828">30秒たちました。出ないなら上の赤い「② 📵 出なかった」を押してください。</b><br>電話アプリが「発信中」のまま無音なら、iPhoneにつながっていない可能性があります（iPhoneのロック解除・同じWi-Fi・Bluetoothを確認）。';
       if (s === 60) { try { var ac = new (window.AudioContext || window.webkitAudioContext)(), o = ac.createOscillator(); o.frequency.value = 660; o.connect(ac.destination); o.start(); setTimeout(function(){ o.stop(); ac.close(); }, 300); } catch(x) {} }
       if (s > 600) ringStop();
     }, 1000);
@@ -758,6 +757,7 @@
     try { if (stream && stream !== MIC_KEEP) stream.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {}
     resetMain(); PREP = null; SECOND = '';
     var cd = card(who); cd.st('📵 2回目も不在として記録しています…');
+    send({ type: 'call_discard', tel: who.tel });
     send({ type: 'second_done', tel: who.tel, name: who.name });
     rpc('二回目終わり', [who.tel, who.name]).then(function(r){ cd.st('✅ 2回目も不在で記録しました（今日' + (r && r.set || 1) + 'セット目おわり）'); cd.done(); })
       .catch(function(e){ cd.st('⚠ 記録できませんでした：' + e.message); });
@@ -767,7 +767,12 @@
 
   /* 出なかったとき：録音を捨てて、この人の電話番号で直接「不在」を記録 → SMSの文面を、この人のカードに出す。
      カードは次の人の電話を始めても消えないので、SMSはあとで送ってもちゃんとこの人に送られる */
+  /* 11/12 社長指示：出なかったとき。録音は捨てて、不在を記録 → 連絡するか・何で送るかは業務ツールが決める（不在の連絡）
+     ・今日もうSMSかLINEを送った人には送らない ・話が進んでいる人には、これまでの流れに合わせた文 ・公式LINEの人はLINEで
+     そのあと、切ってから10秒ほどで自動で2回目をかける（2回目に出なければ、連絡なしで次の人へ） */
+  var NOANS_BUSY = 0;   // 11/12 監査：出なかったの記録中（10〜30秒）に二度押し・別の発信が入らないように
   $('#noans').onclick = function(){
+    if (NOANS_BUSY && Date.now() - NOANS_BUSY < 60000) return;
     ringStop();
     var who = { tel: tel, name: name };
     listening = false;
@@ -775,92 +780,57 @@
     clearInterval(iv);
     try { if (media && media.state !== 'inactive') { media.onstop = null; media.stop(); } } catch(x) {}
     try { if (stream && stream !== MIC_KEEP) stream.getTracks().forEach(function(t){ t.stop(); }); } catch(x) {}
-    resetMain();
-    var prep = PREP && PREP.tel === who.tel ? PREP : null, again = SECOND === who.tel; PREP = null; SECOND = '';
+    resetMain(); PREP = null;
+    NOANS_BUSY = Date.now(); SECOND = who.tel;   // この人の2回目を待っている印（ボタンは「記録中」になる）
+    send({ type: 'call_discard', tel: who.tel });   // 留守電などの聞き取りを業務ツールに残さない
     var vmNow = $('#vmLeft').checked;
-    var to0 = String(who.tel || '').replace(/[^0-9]/g, ''), sent0 = {}; try { sent0 = JSON.parse(localStorage.getItem('smsSent') || '{}'); } catch(x) {}
-    if (prep && prep.sms && !again && (prep.n || 1) <= 1 && !(sent0[to0] && Date.now() - sent0[to0] < 30 * 60000)) {   // 11/9 社長指示：自動で送るのは1通目だけ。2通目からは案を見せて確かめてから   // SMSを先に送って、すぐ2回目をかけられるようにする。不在の記録は裏で進める
-      sent0[to0] = Date.now(); try { localStorage.setItem('smsSent', JSON.stringify(sent0)); } catch(x) {}
-      openExt('shortcuts://run-shortcut?name=' + encodeURIComponent('ACTR_SMS') + '&input=text&text=' + encodeURIComponent(JSON.stringify({ to: to0, body: prep.sms })));
-      var cf = card(who); cf.st('✅ SMSを送りました（不在を記録中）');
-      cf.bd.innerHTML = '<div class="note">送れていなければ → <a href="sms:' + to0 + '&body=' + encodeURIComponent(prep.sms) + '">メッセージで開いて手で送る</a></div>';
-      againShow(who);
-      rpc('架電不在', [who.tel, who.name, vmNow]).then(function(r){
-        cf.st('✅ SMS送信・不在の記録まで完了'); cf.done();
-        send({ type: 'noanswer', recorded: true, tel: who.tel, name: who.name, n: r && r.n || 1, second: false, msg: r && r.msg || '' });
-      }).catch(function(e){ cf.st('⚠ SMSは送りました。不在の記録ができませんでした：' + e.message); });
-      return;
-    }
-    $('#state').textContent = '不在を記録しています…';
-    var cd = card(who);
-    cd.st('📵 不在として記録しています…');
-    var show = function(r, err){
+    var cd = card(who); cd.st('📵 不在を記録して、連絡するかを決めています…');
+    $('#state').textContent = '📵 ' + (who.name || '') + 'さん：不在を記録しています…（このあと自動で2回目をかけます）';
+    var dialed = false;
+    var redial = function(){
+      if (dialed) return; dialed = true; NOANS_BUSY = Date.now() - 58000;   // 2回目の発信まで（約1.5秒）押せない
+      if (tel !== who.tel || $('#stop').style.display === 'block') return;
+      SECOND = who.tel; stepShow('📞 いま：セットの2回目（出なければ、連絡なしで次の人へ）');
+      $('#state').textContent = '📞 2回目をかけます（切ってから10秒ほどでかかります）';
+      setTimeout(function(){ NOANS_BUSY = 0; if (tel === who.tel && SECOND === who.tel && $('#stop').style.display !== 'block') $('#start').click(); }, 1500);
+    };
+    var slow = setTimeout(redial, 15000);   // 記録やAIの文づくりが遅くても、15秒たったら2回目へ（連絡は返事が来た時点で送る）
+    var giveUp = function(){ clearTimeout(slow); dialed = true; NOANS_BUSY = 0; SECOND = ''; };
+    var smsHand = false;
+    var smsOut = function(text){
+      var to = String(who.tel).replace(/[^0-9]/g, '');
+      if (viaTool({ cmd: 'sms', to: to, body: text })) {   // Macの受付が受け取ったときだけ「送った」と記録する
+        var tries = 0, rec1 = function(){ rpc('連絡を送った記録', [who.tel, who.name, text]).then(function(x){ if (!(x && x.ok) && ++tries < 3) setTimeout(rec1, 3000); }).catch(function(){ if (++tries < 3) setTimeout(rec1, 3000); }); };
+        rec1(); cd.st('✅ 不在を記録・SMSを送りました');
+      } else {
+        smsHand = true; cd.st('⚠ 不在は記録しました。SMSは自動で送れませんでした（業務ツールの小さい緑の窓が開いていません）');
+        cd.bd.insertAdjacentHTML('beforeend', '<div class="note"><a href="sms:' + to + '&body=' + encodeURIComponent(text) + '">メッセージで開いて手で送る</a>（送ったら記録されます）</div>');
+        var lk = cd.bd.querySelector('a[href^="sms:"]'); if (lk) lk.addEventListener('click', function(){ rpc('連絡を送った記録', [who.tel, who.name, text]).catch(function(){}); });
+      }
+    };
+    rpc('不在の連絡', [who.tel, who.name, vmNow]).then(function(r){
       r = r || {};
-      if (r.second) {                                   // セットの2回目（SMSのあとの「もう一回」）も出なかった → SMSは送らない
-        cd.el.remove(); pendCount();
-        $('#state').textContent = '📵 ' + (r.msg || 'セットの2回目も不在');
+      if (!r.ok) { cd.st('⚠ 記録できませんでした：' + (r.msg || '')); cd.done(); clearTimeout(slow); redial(); return; }
+      if (r.second) {   // サーバーが「この人の2回目」と判定（ページの読み込み直しなどで、こちらの印が消えていたとき）
+        if (dialed) { cd.st('📵 不在を記録しました（連絡はしていません）'); cd.done(); return; }   // もう2回目をかけている：そのまま
+        giveUp(); cd.st('📵 2回目も不在で記録しました（連絡はしていません）'); cd.done();
+        send({ type: 'second_done', tel: who.tel, name: who.name }); if (typeof AUTO !== 'undefined' && AUTO.on) send({ type: 'auto_next', tel: who.tel });
         return;
       }
-      cd.st(err ? '⚠ 記録できませんでした：' + err + '（SMSは送れます）' : r.dup ? '📵 ' + (r.msg || 'この人の不在は記録済みです') : '📵 セット' + (r.set || 1) + '・1回目 不在');
-      if (!err && !r.dup) $('#state').innerHTML = '<b style="color:#B26A00">📵 ' + esc(who.name || '') + 'さん：SMSを送ったら、すぐもう一回かけてください（セットの2回目）</b>';
-      var go = document.createElement('button'); go.className = 'go'; go.textContent = r.dup ? '✉ 送っていなければ送る' : '✉ SMSを送る';
-      cd.el.querySelector('.hd').appendChild(go);
-      cd.bd.innerHTML = '<div class="smsAsk" style="font-size:12.5px;color:#5C6C78;margin-bottom:2px">送る文面（直してOK）</div><textarea style="width:100%;min-height:130px"></textarea>'
-        + '<button type="button" class="smsVoice" style="margin-top:3px;padding:6px 10px;font-weight:800">🎤 声で直す（例：「もっと短く」「明日の夕方って入れて」）</button><div class="note" style="margin-top:2px"></div>';   // 11/5 社長指示：文面は押さなくても最初から出す
-      if (r.dup) go.style.background = 'var(--muted)';
-      var ta = cd.bd.querySelector('textarea');
-      ta.value = r.sms || 'ACT-Rの香川です！ご応募ありがとうございます。さっきお電話しました📞 15〜20分ほどお話しできたら、ぴったりのお仕事をご案内できます！この番号に折り返しもらうか「◯時ならOK」だけ返信ください🙏';
-      var ask = cd.bd.querySelector('.smsAsk'), touched = false; ta.addEventListener('input', function(){ touched = true; });
-      if (!r.dup && (r.n || 1) >= 2) {                // 11/9 社長指示：2通目からは、これまでの流れ（折り返しに出られなかった等）に合わせた案を出して確かめてもらう
-        ask.innerHTML = '<b style="color:#B26A00">✨ これまでの流れに合わせた案を作っています…</b>';
-        var autoNow = typeof AUTO !== 'undefined' && AUTO.on;   // 11/11 社長指示：オート中は2通目以降も確認なしで送る（送った文はカードと記録に残す）
-        var autoSend = function(){
-          if (!autoNow) return;
-          go.click();
-          ask.innerHTML = '<b style="color:#2E7D32">🤖 オート中なので、この文を自動で送りました（' + (r.n || 2) + '回目の不在）</b>';
-          rpc('オートSMS記録', [who.tel, who.name, ta.value]).catch(function(){});
-        };
-        rpc('不在のSMS案', [who.tel, who.name, ta.value]).then(function(x){
-          if (x && x.ok && !touched) ta.value = x.text;
-          ask.innerHTML = '<b style="color:#B26A00">📝 この内容で送ってもいいですか？</b> 違うところは下の「🎤 声で直す」で言ってください（' + (r.n || 2) + '回目の不在）';
-          autoSend();
-        }).catch(function(){ ask.textContent = '送る文面（直してOK）'; autoSend(); });
-      }
-      cd.bd.querySelector('.smsVoice').onclick = function(){
-        var vb = this, SRx = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SRx) { alert('このブラウザでは声の入力が使えません'); return; }
-        var r2 = new SRx(); r2.lang = 'ja-JP'; r2.interimResults = false; r2.maxAlternatives = 1;
-        vb.disabled = true; vb.textContent = '🎤 どう直すか話してください…';
-        r2.onresult = function(e){
-          var how = e.results[0][0].transcript; vb.textContent = '✨ 「' + how + '」で直しています…';
-          rpc('SMSを直す', [ta.value, how, who.tel]).then(function(x){ if (x && x.ok) { ta.value = x.text; touched = true; ask.innerHTML = '<b style="color:#B26A00">📝 直しました。この内容で送ってもいいですか？</b>'; } else alert('直せませんでした：' + (x && x.msg || '')); })
-            .catch(function(err){ alert('直せませんでした：' + err.message); })
-            .then(function(){ vb.disabled = false; vb.textContent = '🎤 声で直す（例：「もっと短く」「明日の夕方って入れて」）'; });
-        };
-        r2.onerror = function(){ vb.disabled = false; vb.textContent = '🎤 声で直す（聞き取れませんでした。もう一度）'; };
-        r2.onend = function(){ if (/話してください/.test(vb.textContent)) { vb.disabled = false; vb.textContent = '🎤 声で直す（例：「もっと短く」「明日の夕方って入れて」）'; } };
-        r2.start();
-      };
-      go.onclick = function(){
-        var to = String(who.tel || '').replace(/[^0-9]/g, '');
-        if (!to) { alert('電話番号がありません'); return; }
-        var sent = {}; try { sent = JSON.parse(localStorage.getItem('smsSent') || '{}'); } catch(x) {}
-        if (sent[to] && Date.now() - sent[to] < 30 * 60000 && (typeof AUTO !== 'undefined' && AUTO.on ? true : !confirm(Math.round((Date.now() - sent[to]) / 60000) + '分前にこの人へSMSを送っています。もう一度送りますか？'))) return;
-        sent[to] = Date.now(); try { localStorage.setItem('smsSent', JSON.stringify(sent)); } catch(x) {}
-        openExt('shortcuts://run-shortcut?name=' + encodeURIComponent('ACTR_SMS') + '&input=text&text=' + encodeURIComponent(JSON.stringify({ to: to, body: ta.value })));
-        this.disabled = true; this.textContent = '✅ 送りました';
-        againShow(who); cd.st('✅ SMSを送りました'); cd.bd.querySelector('.note').innerHTML = '送れていなければ → <a href="sms:' + to + '&body=' + encodeURIComponent(ta.value) + '">メッセージで開いて手で送る</a>';
-        cd.done();
-      };
-    };
-    rpc('架電不在', [who.tel, who.name, vmNow]).then(function(r){
-      show(r);
-      send({ type: 'noanswer', recorded: true, tel: who.tel, name: who.name, n: r && r.n || 1, second: !!(r && r.second), msg: r && r.msg || '' });
-    }).catch(function(e){ show({}, e.message); });
+      if (r.dup) { cd.st('📵 ' + (r.msg || 'いま記録したところです')); cd.done(); clearTimeout(slow); redial(); return; }
+      if (r.text) cd.bd.innerHTML = '<div class="note" style="white-space:pre-wrap;font-size:12.5px">' + esc(r.text) + '</div>';
+      if (r.channel === 'sms' && r.text) smsOut(r.text);
+      else if (r.channel === 'line') cd.st('✅ 不在を記録・公式LINEで送りました');
+      else cd.st('📵 不在を記録しました' + (r.skip ? '（今日はもう連絡済みなので、SMSは送っていません）' : ''));
+      if (smsHand) {} else cd.done();   // 手で送るリンクを出したときは、カードを残す
+      if (!dialed) send({ type: 'noanswer', recorded: true, tel: who.tel, name: who.name, n: r.n || 1, second: false, msg: r.msg || '' });
+      clearTimeout(slow); redial();
+    }).catch(function(e){ cd.st('⚠ 記録できませんでした：' + e.message); clearTimeout(slow); redial(); });
   };
   // 11/11 社長指示：聞き取りと業務ツールの名前を必ずそろえる。通話中に業務ツールが次の人へ進んだら、今の通話が終わった時点で切り替える
   var PEND_HASH = false;
   // 11/11 社長指示：直したのに古い画面のままにならないように。1分ごとに新しい版が出ていないか見て、電話していないときに自動で読み込み直す
-  var PAGE_VER = '20261111-1840';
+  var PAGE_VER = '20261112-2240';
   setInterval(function(){
     if (listening || (typeof AUTO !== 'undefined' && AUTO.on) || document.querySelector('#pend .pc textarea:focus')) return;
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
