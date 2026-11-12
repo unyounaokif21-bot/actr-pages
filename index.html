@@ -532,7 +532,7 @@
     $('#autoBtn').textContent = '▶ オートモード（自動でどんどんかける）'; $('#autoBtn').style.background = '#4A148C'; autoNote(why || ''); send({ type: 'auto_off' });
     try { localStorage.setItem('AUTO_ON', '0'); } catch(x) {}
   }
-  function autoHours(){ var h = new Date().getHours(); return h >= 9 && h < 20; }
+  function autoHours(){ var h = new Date().getHours(); return (h >= 9 && h < 20) || tel === '09057015693'; }   // 社長の携帯へのテストは時間外でも動く
   /* 相手の声らしい音（呼び出し音＝400Hzあたりの一定の音は数えない）が合わせて1.5秒以上あったら「出た」 */
   function autoListen(){
     try { AUTO.ctx && AUTO.ctx.close(); } catch(x) {}
@@ -830,7 +830,7 @@
   // 11/11 社長指示：聞き取りと業務ツールの名前を必ずそろえる。通話中に業務ツールが次の人へ進んだら、今の通話が終わった時点で切り替える
   var PEND_HASH = false;
   // 11/11 社長指示：直したのに古い画面のままにならないように。1分ごとに新しい版が出ていないか見て、電話していないときに自動で読み込み直す
-  var PAGE_VER = '20261112-2240';
+  var PAGE_VER = '20261112-2300';
   setInterval(function(){
     if (listening || (typeof AUTO !== 'undefined' && AUTO.on) || document.querySelector('#pend .pc textarea:focus')) return;
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
