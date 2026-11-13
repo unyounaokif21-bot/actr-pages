@@ -43,6 +43,7 @@
   #rec{display:none;align-items:center;gap:8px;font-weight:800;color:var(--red);margin-top:8px}
   #rec i{width:10px;height:10px;border-radius:50%;background:var(--red);animation:b 1s infinite}
   @keyframes b{50%{opacity:.2}}
+  @media (prefers-reduced-motion:reduce){#rec i{animation:none}}
   #live:empty{display:none}
   #live{white-space:pre-wrap;background:var(--bg);border-radius:3px;padding:10px;min-height:120px;max-height:45vh;overflow:auto;font-size:13.5px;margin-top:10px}
   .note{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6}
@@ -423,7 +424,9 @@
     if (second) { b.textContent = '③ 📵 2回目も出なかった → 次の人へ'; b.style.background = '#B26A00'; n.textContent = '出たら緑のボタン（話し終わったら押す）。出なければオレンジを押すと、記録して業務ツールが次の人へ進みます'; }
     else { b.textContent = '② 📵 出なかった → 切って、すぐ2回目'; b.style.background = '#C62828'; n.textContent = '出たら緑のボタン（話し終わったら押す）。出なければ赤：切って不在を記録 → 今日まだ連絡していなければSMS（公式LINEの人はLINE）→ 10秒ほどで2回目'; }
   }
-  setInterval(oneDraw, 500);
+  setInterval(function(){ if (!document.hidden) oneDraw(); }, 500);
+  // 省エネ：画面が見えていない間は表示の更新を止め、戻ったらすぐ最新にする
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) { try { oneDraw(); } catch(x) {} try { var cb = document.getElementById('callBtns'); if (cb) cb.style.display = $('#stop').style.display === 'block' ? 'flex' : 'none'; } catch(x) {} } });
   /* 11/12 監査：「相手が出た」ボタンを隠したので、手動の電話は相手の声で自動で判定する（オートと同じ見張り）。
      出た後だけ業務ツールへ聞き取りを送る。留守電の声でも出た扱いになるが、そのあと「出なかった」を押せば記録は残らない */
   var MAN = { t: 0, v: 0, on: false };
@@ -434,7 +437,7 @@
     try { if (autoVoiced()) MAN.v += 200; } catch(x) {}
     if (MAN.v >= 1500) { try { connMark(); } catch(x) {} MAN.on = false; }
   }, 200);
-  setInterval(function(){ var cb = document.getElementById('callBtns'); if (cb) cb.style.display = $('#stop').style.display === 'block' ? 'flex' : 'none'; }, 400);
+  setInterval(function(){ if (document.hidden) return; var cb = document.getElementById('callBtns'); if (cb) cb.style.display = $('#stop').style.display === 'block' ? 'flex' : 'none'; }, 400);
   // 📴 電話を切る：電話を切って、ここまでの録音をいつもどおり保存する（話せたときと同じ）
   $('#hangOnly').onclick = function(){ hangup(); $('#stop').click(); };
   // 🔁 SMSなしで切って、すぐ2回目：不在だけ記録して（SMSは送らない）、10秒ほどで2回目をかける
@@ -511,7 +514,7 @@
     return false;
   }
   function sysLiveNow(){ return sysAdopt(); }
-  setInterval(function(){ var b = $('#sysPrep'); if (b) b.style.display = $('#earMode').checked && !sysLiveNow() && $('#stop').style.display !== 'block' ? 'block' : 'none'; }, 700);
+  setInterval(function(){ if (document.hidden) return; var b = $('#sysPrep'); if (b) b.style.display = $('#earMode').checked && !sysLiveNow() && $('#stop').style.display !== 'block' ? 'block' : 'none'; }, 700);
   $('#sysPrep').onclick = async function(){
     try {
       sysStream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'monitor' }, audio: { echoCancellation: false, noiseSuppression: false }, systemAudio: 'include', selfBrowserSurface: 'exclude', monitorTypeSurfaces: 'include', surfaceSwitching: 'exclude' });
@@ -830,9 +833,9 @@
   // 11/11 社長指示：聞き取りと業務ツールの名前を必ずそろえる。通話中に業務ツールが次の人へ進んだら、今の通話が終わった時点で切り替える
   var PEND_HASH = false;
   // 11/11 社長指示：直したのに古い画面のままにならないように。1分ごとに新しい版が出ていないか見て、電話していないときに自動で読み込み直す
-  var PAGE_VER = '20261113-1520';
+  var PAGE_VER = '20261113-1700';
   setInterval(function(){
-    if (listening || (typeof AUTO !== 'undefined' && AUTO.on) || document.querySelector('#pend .pc textarea:focus')) return;
+    if (document.hidden || listening || (typeof AUTO !== 'undefined' && AUTO.on) || document.querySelector('#pend .pc textarea:focus')) return;
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
       var m = t.match(/PAGE_VER = '([^']+)'/); if (m && m[1] !== PAGE_VER && !listening) location.reload();
     }).catch(function(){});
