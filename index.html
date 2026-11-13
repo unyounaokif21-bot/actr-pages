@@ -88,7 +88,7 @@
   <div id="earNote" class="note" style="display:none;margin-top:4px">押すと「画面を共有」が出ます →「画面全体」を選び、<b>「システムの音声も共有」にチェック</b>して「共有」。画面の映像は使わず、音だけ録ります。通話のあと、このMacの中で文字起こしします（無料・外に送りません）。</div>
   <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:6px"><input type="checkbox" id="viaPhone" style="width:auto"> 📱 iPhoneで発信（Macを通さない・呼び出し音が鳴らない問題が起きない）</label>
   <div id="phoneNote" class="note" style="display:none;margin-top:4px">iPhoneで <b>unyounaokif21-bot.github.io/actr-pages/call/</b> を開いて「待ち受けを始める」を押しておくと、発信のたびにかける人のボタンが出ます。iPhoneはスピーカーにしてMacの近くに置いてください（Macのマイクで録音します）。</div>
-  <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:6px"><input type="checkbox" id="autoHang" style="width:auto"> 📴 ボタンで電話も自動で切る（Macのショートカット「ACTR_HANGUP」を作ってあるときだけ）</label>
+  <label style="display:none;gap:6px;align-items:center;font-size:13px;margin-top:6px"><!-- 11/13：切るボタンはいつも電話も切るので、この設定は出さない --><input type="checkbox" id="autoHang" style="width:auto"> 📴 ボタンで電話も自動で切る（Macのショートカット「ACTR_HANGUP」を作ってあるときだけ）</label>
   <button id="testDial" type="button" style="margin-top:8px;background:#fff;color:#1565C0;border:2px solid #1565C0;font-size:14px;padding:9px">🧪 自分の携帯にテスト発信（090-5701-5693）</button>
   </details>
   <div id="testNote" class="note" style="display:none;margin-top:4px"></div>
@@ -633,12 +633,12 @@
     try { if (window.Notification && Notification.permission === 'granted') new Notification('録音が' + Math.floor(s / 60) + '分を超えました', { body: 'まだ通話中ですか？' }); } catch(x) {}
     longIv = setInterval(function(){
       left--; $('#longSec').textContent = left;
-      if (left <= 0) { closeLong(); $('#stop').click(); }
+      if (left <= 0) { closeLong(); try { hangup(); } catch(x) {} $('#stop').click(); }   // 11/13：止めるときは電話も切る
     }, 1000);
   }
   function closeLong(){ clearInterval(longIv); $('#longBox').style.display = 'none'; longOpen = false; }
   $('#longYes').onclick = function(){ closeLong(); nextCheck = Math.floor((Date.now() - t0) / 1000) + 10 * 60; };
-  $('#longNo').onclick = function(){ closeLong(); $('#stop').click(); };
+  $('#longNo').onclick = function(){ closeLong(); try { hangup(); } catch(x) {} $('#stop').click(); };   // 11/13：終わった → 電話も切る
 
   $('#stop').onclick = function(){
     ringStop();
@@ -830,7 +830,7 @@
   // 11/11 社長指示：聞き取りと業務ツールの名前を必ずそろえる。通話中に業務ツールが次の人へ進んだら、今の通話が終わった時点で切り替える
   var PEND_HASH = false;
   // 11/11 社長指示：直したのに古い画面のままにならないように。1分ごとに新しい版が出ていないか見て、電話していないときに自動で読み込み直す
-  var PAGE_VER = '20261112-2300';
+  var PAGE_VER = '20261113-1520';
   setInterval(function(){
     if (listening || (typeof AUTO !== 'undefined' && AUTO.on) || document.querySelector('#pend .pc textarea:focus')) return;
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
