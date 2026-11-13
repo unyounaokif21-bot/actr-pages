@@ -30,11 +30,19 @@
         if (name === 'withUserObject') return function(){ return run(ok, ng); };
         return function(){
           var args = Array.prototype.slice.call(arguments), end = function(){ window.__rpcN = Math.max(0, (window.__rpcN || 0) - 1); };
-          window.__rpcN = (window.__rpcN || 0) + 1;      // 画面が「処理中」を出すための数
-          fetch(EXEC, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ rpc: name, args: args }) })
-            .then(function(r){ return r.json(); })
-            .then(function(j){ end(); if (j && j.ok) { if (ok) ok(j.v); } else if (ng) ng(new Error(j && j.e || 'エラー')); })
-            .catch(function(e){ end(); if (ng) ng(e); });
+          // 11/13 社長指示（開くのが重い）：読むだけの呼び出しは、同じ中身が5秒以内に重なったら1回の通信を分け合う
+          var RO = /^(前回の入力|前回の話|ボードの履歴|人のまとめ|応募の一覧|番号で探す|求人の全項目|通勤ルート|進捗ステータス|架電キュー|今日外す会社|休み連絡を今日のログから探す|グループ一覧|LINE状態|文字起こしの設定|SMS返信一覧|記録一覧|やり取りの要約|未返信のSMS|求人NG一覧)$/.test(name);
+          var key = RO ? name + '|' + JSON.stringify(args) : '', P = window.__rpcP = window.__rpcP || {};
+          var p0 = key && P[key] && Date.now() - P[key].t < 5000 ? P[key].p : null;
+          if (!p0) {
+            window.__rpcN = (window.__rpcN || 0) + 1;      // 画面が「処理中」を出すための数
+            p0 = fetch(EXEC, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ rpc: name, args: args }) })
+              .then(function(r){ return r.json(); });
+            p0.then(end, end);
+            if (key) P[key] = { p: p0, t: Date.now() };
+          }
+          p0.then(function(j){ if (j && j.ok) { if (ok) ok(j.v); } else if (ng) ng(new Error(j && j.e || 'エラー')); })
+            .catch(function(e){ if (ng) ng(e); });
         };
       } });
     }
