@@ -137,6 +137,7 @@
   var NODIAL = q.get('nodial') === '1', AUTOMODE_REQ = q.get('automode') === '1';
   var tel = (q.get('tel') || '').replace(/[^0-9]/g, '');
   var name = q.get('name') || '';
+  var lastWhoAt = tel ? Date.now() : 0;   // 11/16 社長指示：表示中の人が古いまま（業務ツールで選び直していない）で録音が始まると、別の通話が前の人の分として記録されてしまう事故を防ぐ
   var origin = q.get('origin') || '';
   // 送り先は業務ツール（Google Apps Script の画面）だけに限る
   var okOrigin = (/^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(origin) || origin === "https://unyounaokif21-bot.github.io") ? origin : "";
@@ -280,6 +281,12 @@
   }
   function toolBridgeOk(){ try { return !!(window.opener && !window.opener.closed && window.opener.BRIDGE_OK); } catch(x) { return false; } }
   $('#start').onclick = async function(){
+    // 11/16 社長指示：表示中の人が3分以上前からそのままで、業務ツールから選び直していないときは、別件の通話を前の人の分として記録してしまう事故があったため、ここで必ず確認する
+    if (tel && Date.now() - lastWhoAt > 3 * 60 * 1000) {
+      var okSame = confirm('いま表示しているのは「' + (name || '（氏名なし）') + '」さん（' + tel.replace(/^(\d{3})(\d{4})(\d+)$/, '$1-$2-$3') + '）です。\n\nこの電話は' + (name || 'この方') + 'さんの通話で合っていますか？\n\n違う場合は「キャンセル」を押して、業務ツールで正しい人を開き直してから、もう一度「開始」を押してください。');
+      if (!okSame) { $('#state').textContent = '録音を始めていません。業務ツールで正しい人を開き直してください。'; return; }
+      lastWhoAt = Date.now();
+    }
     // 11/9：受付の窓があるときは、先にマイクを取ってから発信する（鳴り始めてからだとマイクが取れない）。ないときは、発信を先に（ボタンを押した操作のうちに）
     if (toolBridgeOk() && !micLive()) { try { await micGet(); } catch(x) {} }
     if (tel) { if (NODIAL) { NODIAL = false; } else { rpc('発信した', [tel, name]).catch(function(){}); dialTel(tel, name, function(t){ $('#state').textContent = t; }); } }   // 11/9：ツールの「電話する」から来たときは、ツールが発信済み
@@ -833,7 +840,7 @@
   // 11/11 社長指示：聞き取りと業務ツールの名前を必ずそろえる。通話中に業務ツールが次の人へ進んだら、今の通話が終わった時点で切り替える
   var PEND_HASH = false;
   // 11/11 社長指示：直したのに古い画面のままにならないように。1分ごとに新しい版が出ていないか見て、電話していないときに自動で読み込み直す
-  var PAGE_VER = '20261113-1700';
+  var PAGE_VER = '20261116-1100';
   setInterval(function(){
     if (document.hidden || listening || (typeof AUTO !== 'undefined' && AUTO.on) || document.querySelector('#pend .pc textarea:focus')) return;
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
@@ -850,13 +857,13 @@
     var t2 = String(m.tel || '').replace(/[^0-9]/g, ''); if (!t2) return;
     if (t2 === tel) { whoWarn(''); if (m.name && m.name !== name && !listening) { name = m.name; $('#who').innerHTML = esc(name) + '<small>' + esc(tel.replace(/^(\d{3})(\d{4})(\d+)$/, '$1-$2-$3')) + '</small>'; } return; }
     if (listening) { whoWarn('⚠ 業務ツールは ' + (m.name || t2) + 'さんを表示中です。この録音は ' + (name || tel) + 'さんの分として保存します'); return; }
-    tel = t2; name = m.name || ''; whoWarn('');
+    tel = t2; name = m.name || ''; whoWarn(''); lastWhoAt = Date.now();
     $('#who').innerHTML = esc(name || '（氏名なし）') + '<small>' + esc(tel.replace(/^(\d{3})(\d{4})(\d+)$/, '$1-$2-$3')) + '</small>';
   });
   window.addEventListener('hashchange', function(){
     if (listening) { PEND_HASH = true; return; }
     var q2 = new URLSearchParams(location.hash.slice(1));
-    tel = (q2.get('tel') || '').replace(/[^0-9]/g, ''); name = q2.get('name') || '';
+    tel = (q2.get('tel') || '').replace(/[^0-9]/g, ''); name = q2.get('name') || ''; lastWhoAt = tel ? Date.now() : 0;
     $('#who').innerHTML = esc(name || '（氏名なし）') + '<small>' + esc(tel ? tel.replace(/^(\d{3})(\d{4})(\d+)$/, '$1-$2-$3') : '電話番号なし') + '</small>';
     full = ''; chunks = []; $('#live').textContent = ''; $('#after').innerHTML = '';   // 前の人のカード（SMS・記録中）は残すが、1行にたたむ
     foldOld(); stepShow(q2.get('step'));
