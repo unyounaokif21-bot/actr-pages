@@ -136,7 +136,7 @@
   var q = new URLSearchParams(location.hash.slice(1));
   var NODIAL = q.get('nodial') === '1', AUTOMODE_REQ = q.get('automode') === '1';
   var tel = (q.get('tel') || '').replace(/[^0-9]/g, '');
-  var name = q.get('name') || '';
+  var name = q.get('name') || '', via = q.get('via') || '';   // via＝応募した媒体（業務ツールから。インディード／求人ボックス）
   var lastWhoAt = tel ? Date.now() : 0;   // 11/16 社長指示：表示中の人が古いまま（業務ツールで選び直していない）で録音が始まると、別の通話が前の人の分として記録されてしまう事故を防ぐ
   var origin = q.get('origin') || '';
   // 送り先は業務ツール（Google Apps Script の画面）だけに限る
@@ -744,7 +744,7 @@
     var nm = String(name || '').split(/[\s　]/)[0], again = SECOND === tel;   // 留守電のトーク：名乗り → 用件 → SMSを送ること → 折り返しのお願い（30秒以内）
     $('#vmLeft').checked = false; $('#vmBox').open = false;
     $('#vmText').textContent = 'お世話になっております。株式会社アクタルの香川と申します。' + (nm ? nm + '様のお電話でよろしかったでしょうか。' : '')
-      + (again ? '先ほどもお電話いたしました、' : '') + 'ご応募いただいたインディードの件でご連絡いたしました。'
+      + (again ? '先ほどもお電話いたしました、' : '') + 'ご応募いただいた' + (via || '求人ボックス') + 'の件でご連絡いたしました。'
       + 'このあとショートメッセージもお送りしますので、ご都合のよいお時間をご返信いただくか、この番号に折り返しいただけますと幸いです。'
       + 'それでは失礼いたします。';
     $('#ringMsg').innerHTML = '相手が出たら、このまま話してください（録音は始まっています）。<br>出ないときは上の赤い「② 📵 出なかった」を押してください（切って、すぐ2回目をかけます）。';
@@ -855,15 +855,15 @@
     if (!okOrigin || e.origin !== okOrigin) return;
     var m = e.data || {}; if (m.type !== 'who') return;
     var t2 = String(m.tel || '').replace(/[^0-9]/g, ''); if (!t2) return;
-    if (t2 === tel) { whoWarn(''); if (m.name && m.name !== name && !listening) { name = m.name; $('#who').innerHTML = esc(name) + '<small>' + esc(tel.replace(/^(\d{3})(\d{4})(\d+)$/, '$1-$2-$3')) + '</small>'; } return; }
+    if (t2 === tel) { whoWarn(''); if (m.via) via = m.via; if (m.name && m.name !== name && !listening) { name = m.name; $('#who').innerHTML = esc(name) + '<small>' + esc(tel.replace(/^(\d{3})(\d{4})(\d+)$/, '$1-$2-$3')) + '</small>'; } return; }
     if (listening) { whoWarn('⚠ 業務ツールは ' + (m.name || t2) + 'さんを表示中です。この録音は ' + (name || tel) + 'さんの分として保存します'); return; }
-    tel = t2; name = m.name || ''; whoWarn(''); lastWhoAt = Date.now();
+    tel = t2; name = m.name || ''; via = m.via || ''; whoWarn(''); lastWhoAt = Date.now();
     $('#who').innerHTML = esc(name || '（氏名なし）') + '<small>' + esc(tel.replace(/^(\d{3})(\d{4})(\d+)$/, '$1-$2-$3')) + '</small>';
   });
   window.addEventListener('hashchange', function(){
     if (listening) { PEND_HASH = true; return; }
     var q2 = new URLSearchParams(location.hash.slice(1));
-    tel = (q2.get('tel') || '').replace(/[^0-9]/g, ''); name = q2.get('name') || ''; lastWhoAt = tel ? Date.now() : 0;
+    tel = (q2.get('tel') || '').replace(/[^0-9]/g, ''); name = q2.get('name') || ''; via = q2.get('via') || ''; lastWhoAt = tel ? Date.now() : 0;
     $('#who').innerHTML = esc(name || '（氏名なし）') + '<small>' + esc(tel ? tel.replace(/^(\d{3})(\d{4})(\d+)$/, '$1-$2-$3') : '電話番号なし') + '</small>';
     full = ''; chunks = []; $('#live').textContent = ''; $('#after').innerHTML = '';   // 前の人のカード（SMS・記録中）は残すが、1行にたたむ
     foldOld(); stepShow(q2.get('step'));
