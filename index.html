@@ -211,6 +211,16 @@
 
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   var rec = null, media = null, stream = null, chunks = [], full = '', listening = false, t0 = 0, iv = null;
+  /* 11/16 社長指示：録音ページは1つだけ。新しく開いたら、古いほう（録音していないもの）は自分で閉じる。人の取り違え防止 */
+  try { window.name = 'actr_rec'; } catch(x) {}
+  try {
+    var MY_T = Date.now(), recBC = new BroadcastChannel('actr_rec');
+    recBC.onmessage = function(ev){ var d = ev.data || {}; if (!d.t || d.t === MY_T) return;
+      if (d.t > MY_T) { if (!listening) { try { recBC.close(); } catch(x) {} window.close(); } else recBC.postMessage({ busy: MY_T, t: MY_T }); }
+      else if (d.busy && d.t < MY_T) { var b = document.getElementById('whoWarn') || document.body; try { $('#state').innerHTML = '<b style="color:#C62828">別の録音ページで録音中です。録音が終わったら、そちらは自動で閉じます。</b>'; } catch(x) {} } };
+    recBC.postMessage({ t: MY_T });
+    setInterval(function(){ if (!listening) recBC.postMessage({ t: MY_T, ping: 1 }); }, 5000);   // 録音中だった古いほうも、録音が終わったら閉じる
+  } catch(x) {}
   /* 11/9 社長指示：相手が出てから聞き取り・要約を始める。「✅ 相手が出た」（オートなら出たと判定したとき）で CONN_AT を決める。
      それまでの聞き取りは preFull に置いておき、押し忘れたまま話して終わったときだけ使う */
   var CONN_AT = 0, preFull = '';
