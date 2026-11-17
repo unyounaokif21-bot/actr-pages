@@ -28,7 +28,10 @@
     var MOB = (window.innerWidth || screen.width) < 700, Q = [], busy = 0, MAX = MOB ? 3 : 99;
     var FIRST = /^(架電キュー|番号で探す|人のまとめ|前回の入力|進捗更新|未返信のSMS)$/;
     function pump(){ while (busy < MAX && Q.length) { var j = Q.shift(); busy++; j.f().then(function(r){ busy--; pump(); return r; }, function(e){ busy--; pump(); throw e; }).then(j.ok, j.ng); } }
-    function lim(name, f){ if (!MOB) return f(); return new Promise(function(ok, ng){ var job = { f: f, ok: ok, ng: ng }; if (FIRST.test(name)) Q.unshift(job); else Q.push(job); pump(); }); }
+    // Mac向けの点検・一覧（朝のチェック・端末の状態など）は、携帯では開いて30秒たってから流す
+    var LOW = /^(朝のチェック|端末の状態|文字起こしの設定|グループ一覧|LINE状態|休み連絡を今日のログから探す|記録一覧|SMS返信一覧|外している会社|やり取りの要約|ボードの履歴)$/, T0 = Date.now();
+    function lim(name, f){ if (!MOB) return f(); return new Promise(function(ok, ng){ var job = { f: f, ok: ok, ng: ng }, wait = LOW.test(name) ? Math.max(0, 30000 - (Date.now() - T0)) : 0;
+      setTimeout(function(){ if (FIRST.test(name)) Q.unshift(job); else Q.push(job); pump(); }, wait); }); }
     function run(ok, ng){
       return new Proxy({}, { get: function(_, name){
         if (name === 'withSuccessHandler') return function(f){ return run(f, ng); };
