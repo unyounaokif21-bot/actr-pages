@@ -23,6 +23,12 @@
   if (!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(u)) { msg.textContent = 'このページは、業務ツールの案内リンク（LINEなど）から開いてください。'; return; }
   var qs = new URLSearchParams(location.search); qs.set('raw', '1');
   function shim(EXEC){
+    // 11/17 社長指示（携帯版が読み込まない）：携帯では同時の通信を3本までにして、電話の順番・番号検索を先に通す
+    //   （携帯は同じ相手への同時接続が少なく、開いた直後の20本以上の呼び出しで詰まって何も出なくなるため）
+    var MOB = (window.innerWidth || screen.width) < 700, Q = [], busy = 0, MAX = MOB ? 3 : 99;
+    var FIRST = /^(架電キュー|番号で探す|人のまとめ|前回の入力|進捗更新|未返信のSMS)$/;
+    function pump(){ while (busy < MAX && Q.length) { var j = Q.shift(); busy++; j.f().then(function(r){ busy--; pump(); return r; }, function(e){ busy--; pump(); throw e; }).then(j.ok, j.ng); } }
+    function lim(name, f){ if (!MOB) return f(); return new Promise(function(ok, ng){ var job = { f: f, ok: ok, ng: ng }; if (FIRST.test(name)) Q.unshift(job); else Q.push(job); pump(); }); }
     function run(ok, ng){
       return new Proxy({}, { get: function(_, name){
         if (name === 'withSuccessHandler') return function(f){ return run(f, ng); };
@@ -36,8 +42,9 @@
           var p0 = key && P[key] && Date.now() - P[key].t < 5000 ? P[key].p : null;
           if (!p0) {
             window.__rpcN = (window.__rpcN || 0) + 1;      // 画面が「処理中」を出すための数
-            p0 = fetch(EXEC, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ rpc: name, args: args }) })
-              .then(function(r){ return r.json(); });
+            var LOG = window.__rpcLog = window.__rpcLog || [], rec = { n: name, t: Date.now() }; LOG.push(rec);
+            p0 = lim(name, function(){ rec.s = Date.now(); return fetch(EXEC, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ rpc: name, args: args }) }); })
+              .then(function(r){ rec.ms = Date.now() - rec.t; return r.json(); });
             p0.then(end, end);
             if (key) P[key] = { p: p0, t: Date.now() };
           }
