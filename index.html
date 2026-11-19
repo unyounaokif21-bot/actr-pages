@@ -814,7 +814,7 @@
       $('#state').textContent = '📞 2回目をかけます（切ってから10秒ほどでかかります）';
       setTimeout(function(){ NOANS_BUSY = 0; if (tel === who.tel && SECOND === who.tel && $('#stop').style.display !== 'block') $('#start').click(); }, 800);   // 11/16 社長指示：2回目の発信までの待ちを1.5秒→0.8秒に短縮
     };
-    var slow = setTimeout(redial, 4000);   // 11/16 社長指示：15秒は体感が遅すぎたので短縮（記録・SMS文づくりは裏で続け、終わり次第 cd.st() で更新。2回目の発信はそれを待たない）
+    var slow = setTimeout(redial, 2500);   // 11/19 社長指示：さらに短縮（4秒→2.5秒）   // 11/16 社長指示：15秒は体感が遅すぎたので短縮（記録・SMS文づくりは裏で続け、終わり次第 cd.st() で更新。2回目の発信はそれを待たない）
     var giveUp = function(){ clearTimeout(slow); dialed = true; NOANS_BUSY = 0; SECOND = ''; };
     var smsHand = false;
     var smsOut = function(text){
@@ -850,7 +850,7 @@
   // 11/11 社長指示：聞き取りと業務ツールの名前を必ずそろえる。通話中に業務ツールが次の人へ進んだら、今の通話が終わった時点で切り替える
   var PEND_HASH = false;
   // 11/11 社長指示：直したのに古い画面のままにならないように。1分ごとに新しい版が出ていないか見て、電話していないときに自動で読み込み直す
-  var PAGE_VER = '20261116-1145';
+  var PAGE_VER = '20261119-1730';
   setInterval(function(){
     if (document.hidden || listening || (typeof AUTO !== 'undefined' && AUTO.on) || document.querySelector('#pend .pc textarea:focus')) return;
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
