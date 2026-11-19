@@ -823,9 +823,8 @@
         var tries = 0, rec1 = function(){ rpc('連絡を送った記録', [who.tel, who.name, text]).then(function(x){ if (!(x && x.ok) && ++tries < 3) setTimeout(rec1, 3000); }).catch(function(){ if (++tries < 3) setTimeout(rec1, 3000); }); };
         rec1(); cd.st('✅ 不在を記録・SMSを送りました');
       } else {
-        smsHand = true; cd.st('⚠ 不在は記録しました。SMSは自動で送れませんでした（業務ツールの小さい緑の窓が開いていません）');
-        cd.bd.insertAdjacentHTML('beforeend', '<div class="note"><a href="sms:' + to + '&body=' + encodeURIComponent(text) + '">メッセージで開いて手で送る</a>（送ったら記録されます）</div>');
-        var lk = cd.bd.querySelector('a[href^="sms:"]'); if (lk) lk.addEventListener('click', function(){ rpc('連絡を送った記録', [who.tel, who.name, text]).catch(function(){}); });
+        // 11/19 社長指示：この端末から送らない（私用携帯の番号から出てしまうため）。Mac（社用携帯）に頼む
+        rpc('SMSを頼む', [who.tel, who.name, text]).then(function(x){ cd.st(x && x.ok ? '✅ 不在を記録・SMSはMac（社用携帯）から1分以内に送ります' : '⚠ SMSを頼めませんでした：' + (x && x.msg || '')); }).catch(function(e){ cd.st('⚠ SMSを頼めませんでした：' + e.message); });
       }
     };
     rpc('不在の連絡', [who.tel, who.name, vmNow]).then(function(r){
@@ -850,7 +849,7 @@
   // 11/11 社長指示：聞き取りと業務ツールの名前を必ずそろえる。通話中に業務ツールが次の人へ進んだら、今の通話が終わった時点で切り替える
   var PEND_HASH = false;
   // 11/11 社長指示：直したのに古い画面のままにならないように。1分ごとに新しい版が出ていないか見て、電話していないときに自動で読み込み直す
-  var PAGE_VER = '20261119-1730';
+  var PAGE_VER = '20261119-1900';
   setInterval(function(){
     if (document.hidden || listening || (typeof AUTO !== 'undefined' && AUTO.on) || document.querySelector('#pend .pc textarea:focus')) return;
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
