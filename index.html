@@ -302,6 +302,9 @@
     if (tel) { if (NODIAL) { NODIAL = false; } else { rpc('発信した', [tel, name]).catch(function(){}); dialTel(tel, name, function(t){ $('#state').textContent = t; }); } }   // 11/9：ツールの「電話する」から来たときは、ツールが発信済み
     EAR = $('#earMode').checked;
     if (EAR) { try { if (!micLive()) await micGet(); } catch(x) {} await bhGet(); }   // 11/9：BlackHoleがあれば、それを相手の声にする
+    // 11/19 社長指示（スピーカーの日は話者が分かれていなかった）：イヤホンでなくても、BlackHoleがあれば相手の声として別に録って話者を分ける
+    //   （音の出口を「複数出力装置」＝Macのスピーカー＋BlackHole にしておくと、相手の声がBlackHoleにも入る）
+    if (!EAR) { try { if (!micLive()) await micGet(); } catch(x) {} if (await bhGet()) EAR = true; }
     var sysLive = sysAdopt();
     var byHand = !navigator.userActivation || navigator.userActivation.isActive;   // 11/9：自動で始まったとき（ボタンを押していない）は、画面共有の選択窓を出さない（出すとそこで止まる）
     if (EAR && !sysLive && !byHand) { $('#state').innerHTML = '<b style="color:#C62828">⚠ 相手の声を録る準備ができていません。今回は自分の声だけ録ります。</b>業務ツールの「🎧 相手の声の準備」を押しておいてください。'; }
@@ -414,6 +417,7 @@
       var from = firstThem ? Math.max(firstThem.t - 3, (sp.connSec || 0) - 1) : sp.connSec - 1;   // 相手の声が録れていなくても、「相手が出た」のあとの自分の声は残す   // 「✅ 相手が出た」より前（呼び出し中）は入れない
       sp.out = sp.out.filter(function(x){ return x.t >= from && !(x.who === 'them' && ann.test(x.text)); });
       var them = sp.out.filter(function(x){ return x.who === 'them'; });
+      if (!them.length) return '';                            // 11/19：相手の声が1つも録れていない（音の出口がBlackHoleに流れていない）ときは、全部を「香川」にしない。ふつうの文字起こしに戻す
       var lines = sp.out.filter(function(x){                 // 相手の声がマイクにも入った（スピーカーの日）分は、相手側だけ残す
         return x.who === 'them' || !them.some(function(y){ return Math.abs(y.t - x.t) < 8 && sim(x.text, y.text) > 0.6; });
       }).sort(function(a, b){ return a.t - b.t; });
@@ -849,7 +853,7 @@
   // 11/11 社長指示：聞き取りと業務ツールの名前を必ずそろえる。通話中に業務ツールが次の人へ進んだら、今の通話が終わった時点で切り替える
   var PEND_HASH = false;
   // 11/11 社長指示：直したのに古い画面のままにならないように。1分ごとに新しい版が出ていないか見て、電話していないときに自動で読み込み直す
-  var PAGE_VER = '20261119-1900';
+  var PAGE_VER = '20261119-2010';
   setInterval(function(){
     if (document.hidden || listening || (typeof AUTO !== 'undefined' && AUTO.on) || document.querySelector('#pend .pc textarea:focus')) return;
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
